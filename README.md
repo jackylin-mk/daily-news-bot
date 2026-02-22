@@ -1,5 +1,3 @@
-# 📰 每日新聞摘要 Telegram Bot
-
 # 📰 每日新聞 + VoteFlux 戰報 Telegram Bot
 
 每天早上自動推播兩份報告到 Telegram：
