@@ -1,0 +1,26 @@
+name: 每日新聞推播
+
+on:
+  schedule:
+    # 每天台灣時間早上 8:00 執行（UTC 00:00）
+    - cron: '0 0 * * *'
+  workflow_dispatch:  # 允許手動觸發（方便測試）
+
+jobs:
+  send-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run News Bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python news_bot.py
