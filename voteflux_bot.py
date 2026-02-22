@@ -1,8 +1,8 @@
 """
-VoteFlux 每日戰報
-- 使用 OpenAI API (GPT-4o) 分析預測市場（輸出 JSON）
-- Python 將 JSON 組裝成完整 HTML 報告
-- 部署到 GitHub Pages，推播連結到 Telegram
+VoteFlux 每日市場研究報告
+- 使用 OpenAI API (GPT-4o) 以資深預測投注玩家視角分析競品
+- 產生完整 HTML 報告部署到 GitHub Pages
+- 推播報告連結到 Telegram
 """
 
 import os
@@ -51,45 +51,81 @@ def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o") -> 
 
 
 # ─── 產生報告內容（JSON）─────────────────────────────────
-SYSTEM_PROMPT = """你是一位具備 10 年經驗的資深預測市場分析師兼金融科技戰略顧問。
-你的風格硬核、犀利、注重數據，並對 Web3 與傳統金融市場有極深洞見。
-你必須以 JSON 格式回覆，不要輸出任何其他文字。所有內容使用繁體中文。"""
+SYSTEM_PROMPT = """你是一位在預測市場（Prediction Market）打滾超過 10 年的資深玩家。
+
+你的背景：
+- 你從 Intrade 時代就開始玩，經歷過 PredictIt、Augur、到現在的 Polymarket 世代
+- 你每天在多個平台之間套利，對各平台的流動性、手續費、出入金速度、盤口深度瞭若指掌
+- 你同時熟悉傳統合規路線（如 Kalshi 的 CFTC 監管）和 DeFi/Web3 鏈上預測市場
+- 你說話直接、犀利、不廢話，用數據和親身經驗說話
+- 你對爛平台毫不留情，對好平台也會指出它的隱患
+
+你的任務是每天以「老玩家」的第一人稱視角，寫一份預測市場競品日報。
+所有輸出皆使用繁體中文。你必須以純 JSON 格式回覆，不要輸出任何其他文字。"""
 
 
 def generate_report_data() -> dict:
-    user_prompt = f"""現在是 {TODAY_STR}，請執行每日市場研究報告。
+    user_prompt = f"""今天是 {TODAY_STR}。
 
-請以嚴格的 JSON 格式回覆（不要加 markdown 代碼塊），結構如下：
+幫我寫今天的競品日報。規則如下：
+
+1. **DAILY DISCOVERY**
+   先找一個我可能沒聽過的預測市場平台（不能是 Polymarket、Kalshi、VoteFlux、Hyperliquid、Predict.fun），
+   簡單介紹它，然後用你老玩家的直覺評價它值不值得花時間研究。
+
+2. **競品深度分析**
+   對以下 6 個平台做分析，你來決定用哪些維度。
+   平台清單：Polymarket, Kalshi, VoteFlux, Hyperliquid, Predict.fun, 以及你在 DAILY DISCOVERY 找到的那個。
+   
+   我不限定分析維度，你自己挑 4-6 個你覺得身為玩家最在意的面向。
+   例如（但不限於）：流動性深度、出入金便利性、手續費/滑點、盤口種類豐富度、結算速度、UX/UI 體驗、安全性、監管合規、社群活躍度……你自己決定。
+   
+   每個平台每個維度給 1-10 分，並附上簡短的老玩家點評。
+
+3. **今日觀察與碎碎念**
+   用第一人稱寫 3-5 條你今天對市場的觀察、心得、或對某個平台的吐槽。
+   要有個人風格，像是老手在寫交易日記。
+
+4. **給 VoteFlux 的建議**
+   站在一個希望看到更多好平台出現的老玩家立場，給 VoteFlux 3-5 條實際可執行的建議。
+
+5. **各市場熱門題目推薦**
+   針對這 6 個地區（印度、孟加拉、越南、馬來西亞、菲律賓、泰國），
+   各推薦 2 個你覺得會有交易量的預測題目。
+
+以嚴格 JSON 格式回覆（不要加 markdown 代碼塊），結構如下：
 
 {{
   "daily_discovery": {{
     "name": "平台名稱",
     "url": "網址",
-    "description": "平台簡述（2-3句）",
-    "expert_comment": "資深分析師點評（2-3句）"
+    "description": "這平台在幹嘛（2-3句）",
+    "veteran_take": "老玩家的真實評價（2-3句，要有個性）"
   }},
-  "competitors": [
+  "analysis_dimensions": ["維度1", "維度2", "維度3", "維度4"],
+  "competitor_analysis": [
     {{
       "name": "平台名稱",
-      "liquidity_analysis": "流動性分析（1-2句）",
-      "fee_analysis": "費率滑點分析（1-2句）",
-      "speed_analysis": "反應速度分析（1-2句）"
+      "scores": {{
+        "維度1": 8,
+        "維度2": 7
+      }},
+      "comments": {{
+        "維度1": "一句話點評",
+        "維度2": "一句話點評"
+      }},
+      "overall_verdict": "一句話總結這平台（老玩家口吻）"
     }}
   ],
-  "service_ratings": [
-    {{
-      "name": "平台名稱",
-      "live_chat": "有/無（附說明）",
-      "messaging_app": "有/無（附說明）",
-      "email_support": "有/無（附說明）"
-    }}
+  "daily_notes": [
+    "今日觀察1（第一人稱）",
+    "今日觀察2",
+    "今日觀察3"
   ],
-  "action_plan": [
-    "建議1：具體可執行的戰術建議",
-    "建議2：...",
-    "建議3：...",
-    "建議4：...",
-    "建議5：..."
+  "voteflux_advice": [
+    "建議1：具體可執行",
+    "建議2：具體可執行",
+    "建議3：具體可執行"
   ],
   "market_topics": [
     {{
@@ -119,10 +155,7 @@ def generate_report_data() -> dict:
   ]
 }}
 
-competitors 必須包含 6 個對象：VoteFlux, Kalshi, Hyperliquid, Predict.fun, Polymarket, 以及 daily_discovery 中的隨機競品。
-service_ratings 也必須包含同樣 6 個對象。
-action_plan 要結合 Kalshi（合規）、Hyperliquid（Outcome Trading）、Predict.fun（DeFi 生息）三大邏輯為 VoteFlux 提供建議。
-
+competitor_analysis 必須包含 6 個平台。scores 和 comments 的 key 必須與 analysis_dimensions 中的維度名稱完全一致。
 只輸出 JSON，不要輸出任何其他文字。"""
 
     raw = call_openai(SYSTEM_PROMPT, user_prompt)
@@ -138,37 +171,70 @@ action_plan 要結合 Kalshi（合規）、Hyperliquid（Outcome Trading）、Pr
 
 
 # ─── 組裝 HTML ───────────────────────────────────────────
+def score_color(score: int) -> str:
+    """根據分數回傳顏色"""
+    if score >= 8:
+        return "#3fb950"  # 綠
+    elif score >= 5:
+        return "#d29922"  # 黃
+    else:
+        return "#f85149"  # 紅
+
+
 def build_html(data: dict) -> str:
     dd = data["daily_discovery"]
+    dims = data["analysis_dimensions"]
 
-    # 競品分析表格
+    # ── 競品分析表頭
+    dim_headers = "".join(f"<th>{d}</th>" for d in dims)
+
+    # ── 競品分析表格行
     comp_rows = ""
-    for c in data["competitors"]:
+    for c in data["competitor_analysis"]:
+        scores_cells = ""
+        for d in dims:
+            s = c["scores"].get(d, "—")
+            if isinstance(s, (int, float)):
+                color = score_color(int(s))
+                scores_cells += f'<td><span class="score" style="color:{color}">{s}</span></td>'
+            else:
+                scores_cells += f"<td>{s}</td>"
         comp_rows += f"""<tr>
             <td><b>{c['name']}</b></td>
-            <td>{c['liquidity_analysis']}</td>
-            <td>{c['fee_analysis']}</td>
-            <td>{c['speed_analysis']}</td>
+            {scores_cells}
         </tr>"""
 
-    # 客服評分表格
-    svc_rows = ""
-    for s in data["service_ratings"]:
-        svc_rows += f"""<tr>
-            <td><b>{s['name']}</b></td>
-            <td>{s['live_chat']}</td>
-            <td>{s['messaging_app']}</td>
-            <td>{s['email_support']}</td>
-        </tr>"""
+    # ── 競品詳細點評卡片
+    comp_cards = ""
+    for c in data["competitor_analysis"]:
+        comments_html = ""
+        for d in dims:
+            comment = c["comments"].get(d, "")
+            s = c["scores"].get(d, "—")
+            if isinstance(s, (int, float)):
+                color = score_color(int(s))
+                comments_html += f'<div class="comment-row"><span class="dim-label">{d}</span> <span class="score" style="color:{color}">{s}/10</span> — {comment}</div>'
+            else:
+                comments_html += f'<div class="comment-row"><span class="dim-label">{d}</span> {comment}</div>'
+        comp_cards += f"""<div class="comp-card">
+            <h3>{c['name']}</h3>
+            <div class="verdict">💬 {c['overall_verdict']}</div>
+            {comments_html}
+        </div>"""
 
-    # 行動建議
-    actions_html = ""
-    for i, a in enumerate(data["action_plan"], 1):
-        actions_html += f'<div class="action-item">🎯 <b>建議 {i}：</b>{a}</div>\n'
+    # ── 今日觀察
+    notes_html = ""
+    for i, note in enumerate(data["daily_notes"], 1):
+        notes_html += f'<div class="note-item">📝 {note}</div>\n'
 
-    # 市場題目
-    markets_html = ""
+    # ── VoteFlux 建議
+    advice_html = ""
+    for i, a in enumerate(data["voteflux_advice"], 1):
+        advice_html += f'<div class="action-item">🎯 <b>#{i}</b> {a}</div>\n'
+
+    # ── 市場題目
     flags = {"印度": "🇮🇳", "孟加拉": "🇧🇩", "越南": "🇻🇳", "馬來西亞": "🇲🇾", "菲律賓": "🇵🇭", "泰國": "🇹🇭"}
+    markets_html = ""
     for m in data["market_topics"]:
         flag = flags.get(m["market"], "🌏")
         topics = "".join(f"<li>{t}</li>" for t in m["topics"])
@@ -188,57 +254,88 @@ def build_html(data: dict) -> str:
     body {{
         background: #0d1117; color: #c9d1d9;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        line-height: 1.6; padding: 20px; max-width: 1200px; margin: 0 auto;
+        line-height: 1.7; padding: 20px; max-width: 1200px; margin: 0 auto;
     }}
     h1 {{ color: #58a6ff; font-size: 2em; margin-bottom: 5px; }}
     h2 {{
-        color: #58a6ff; font-size: 1.4em; margin: 30px 0 15px;
+        color: #58a6ff; font-size: 1.4em; margin: 40px 0 15px;
         padding-bottom: 8px; border-bottom: 2px solid #21262d;
     }}
-    h3 {{ color: #79c0ff; font-size: 1.1em; margin-bottom: 8px; }}
+    h3 {{ color: #79c0ff; font-size: 1.15em; margin-bottom: 8px; }}
+
     .header {{
         text-align: center; padding: 30px 0;
-        border-bottom: 3px solid #f0883e;
-        margin-bottom: 30px;
+        border-bottom: 3px solid #f0883e; margin-bottom: 30px;
     }}
     .header .date {{ color: #8b949e; font-size: 1.1em; margin-top: 8px; }}
-    .header .subtitle {{ color: #f0883e; font-size: 0.9em; margin-top: 5px; }}
+    .header .subtitle {{ color: #f0883e; font-size: 0.9em; margin-top: 5px; letter-spacing: 2px; }}
 
     /* Discovery */
     .discovery {{
         background: linear-gradient(135deg, #161b22, #1c2333);
-        border: 1px solid #f0883e; border-radius: 10px;
+        border: 1px solid #f0883e; border-radius: 12px;
         padding: 25px; margin: 20px 0;
     }}
     .discovery .badge {{
         display: inline-block; background: #f0883e; color: #0d1117;
-        padding: 3px 12px; border-radius: 20px; font-weight: bold;
+        padding: 4px 14px; border-radius: 20px; font-weight: bold;
         font-size: 0.85em; margin-bottom: 15px;
     }}
-    .discovery .platform-name {{ color: #f0883e; font-size: 1.3em; font-weight: bold; }}
-    .discovery .url {{ color: #58a6ff; font-size: 0.9em; }}
-    .discovery p {{ margin-top: 10px; }}
-    .discovery .comment {{
-        margin-top: 15px; padding-top: 15px;
-        border-top: 1px solid #30363d; font-style: italic; color: #8b949e;
+    .discovery .platform-name {{ color: #f0883e; font-size: 1.4em; font-weight: bold; }}
+    .discovery .url {{ color: #58a6ff; font-size: 0.85em; word-break: break-all; }}
+    .discovery p {{ margin-top: 12px; }}
+    .discovery .veteran-take {{
+        margin-top: 15px; padding: 15px;
+        background: rgba(240, 136, 62, 0.08); border-radius: 8px;
+        border-left: 4px solid #f0883e;
+        font-style: italic; color: #e6edf3;
     }}
+    .discovery .veteran-take::before {{ content: "🎙️ 老玩家說："; font-style: normal; font-weight: bold; display: block; margin-bottom: 5px; color: #f0883e; }}
 
-    /* Tables */
+    /* Score Table */
     table {{
         width: 100%; border-collapse: collapse;
-        background: #161b22; border-radius: 8px; overflow: hidden;
+        background: #161b22; border-radius: 10px; overflow: hidden;
         margin: 15px 0;
     }}
     th {{
         background: #21262d; color: #58a6ff;
-        padding: 12px 15px; text-align: left;
+        padding: 14px 15px; text-align: center;
         font-weight: 600; font-size: 0.9em;
     }}
-    td {{ padding: 12px 15px; border-bottom: 1px solid #21262d; font-size: 0.9em; }}
+    th:first-child {{ text-align: left; }}
+    td {{ padding: 12px 15px; border-bottom: 1px solid #21262d; text-align: center; font-size: 0.9em; }}
+    td:first-child {{ text-align: left; }}
     tr:hover td {{ background: #1c2333; }}
     tr:last-child td {{ border-bottom: none; }}
+    .score {{ font-weight: bold; font-size: 1.1em; }}
 
-    /* Action Plan */
+    /* Competitor Cards */
+    .comp-cards {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px; margin: 15px 0; }}
+    .comp-card {{
+        background: #161b22; border: 1px solid #21262d;
+        border-radius: 10px; padding: 20px;
+    }}
+    .comp-card .verdict {{
+        margin: 10px 0 15px; padding: 10px;
+        background: rgba(88, 166, 255, 0.06); border-radius: 6px;
+        font-style: italic; color: #8b949e; font-size: 0.95em;
+    }}
+    .comment-row {{ margin: 6px 0; font-size: 0.9em; }}
+    .dim-label {{
+        display: inline-block; background: #21262d;
+        padding: 2px 8px; border-radius: 4px; font-size: 0.8em;
+        margin-right: 6px; color: #8b949e;
+    }}
+
+    /* Notes */
+    .note-item {{
+        background: #161b22; border-left: 4px solid #8957e5;
+        padding: 15px 20px; margin: 10px 0; border-radius: 0 8px 8px 0;
+        font-size: 0.95em;
+    }}
+
+    /* Action Items */
     .action-item {{
         background: #161b22; border-left: 4px solid #3fb950;
         padding: 15px 20px; margin: 10px 0; border-radius: 0 8px 8px 0;
@@ -251,15 +348,22 @@ def build_html(data: dict) -> str:
     }}
     .market-card {{
         background: #161b22; border: 1px solid #21262d;
-        border-radius: 8px; padding: 20px;
+        border-radius: 10px; padding: 20px;
     }}
     .market-card ul {{ margin-top: 10px; padding-left: 20px; }}
     .market-card li {{ margin: 8px 0; color: #c9d1d9; }}
 
     /* Footer */
     .footer {{
-        text-align: center; margin-top: 40px; padding-top: 20px;
+        text-align: center; margin-top: 50px; padding-top: 20px;
         border-top: 1px solid #21262d; color: #484f58; font-size: 0.85em;
+    }}
+
+    @media (max-width: 768px) {{
+        body {{ padding: 12px; }}
+        .comp-cards, .markets-grid {{ grid-template-columns: 1fr; }}
+        table {{ font-size: 0.8em; }}
+        th, td {{ padding: 8px 10px; }}
     }}
 </style>
 </head>
@@ -268,7 +372,7 @@ def build_html(data: dict) -> str:
 <div class="header">
     <h1>🤖 VoteFlux 每日戰報</h1>
     <div class="date">{TODAY_STR}</div>
-    <div class="subtitle">Prediction Market Intelligence Report</div>
+    <div class="subtitle">PREDICTION MARKET DAILY INTELLIGENCE</div>
 </div>
 
 <!-- DAILY DISCOVERY -->
@@ -278,53 +382,42 @@ def build_html(data: dict) -> str:
     <div class="platform-name">{dd['name']}</div>
     <div class="url">{dd.get('url', '')}</div>
     <p>{dd['description']}</p>
-    <div class="comment">💬 資深分析師點評：{dd['expert_comment']}</div>
+    <div class="veteran-take">{dd['veteran_take']}</div>
 </div>
 
-<!-- 競品分析 -->
-<h2>📊 全球競品深度分析</h2>
+<!-- 評分總覽 -->
+<h2>📊 競品評分總覽</h2>
 <table>
     <thead>
-        <tr>
-            <th>平台</th>
-            <th>流動性分析</th>
-            <th>費率 / 滑點</th>
-            <th>反應速度</th>
-        </tr>
+        <tr><th>平台</th>{dim_headers}</tr>
     </thead>
     <tbody>
         {comp_rows}
     </tbody>
 </table>
 
-<!-- 客服評分 -->
-<h2>🎧 客服功能評分表</h2>
-<table>
-    <thead>
-        <tr>
-            <th>平台</th>
-            <th>網站即時對話框</th>
-            <th>即時通訊軟體客服</th>
-            <th>非即時客服 (Email)</th>
-        </tr>
-    </thead>
-    <tbody>
-        {svc_rows}
-    </tbody>
-</table>
+<!-- 詳細點評 -->
+<h2>🔬 各平台詳細點評</h2>
+<div class="comp-cards">
+    {comp_cards}
+</div>
 
-<!-- 戰略行動建議 -->
-<h2>⚔️ 戰略行動建議 (Action Plan)</h2>
-{actions_html}
+<!-- 今日觀察 -->
+<h2>📝 今日觀察與碎碎念</h2>
+{notes_html}
 
-<!-- 目標市場預測題目 -->
-<h2>🌏 目標市場預測題目</h2>
+<!-- VoteFlux 建議 -->
+<h2>⚔️ 給 VoteFlux 的建議</h2>
+{advice_html}
+
+<!-- 市場題目 -->
+<h2>🌏 各市場熱門題目推薦</h2>
 <div class="markets-grid">
     {markets_html}
 </div>
 
 <div class="footer">
-    <p>© 2026 VoteFlux Daily Intelligence Report | Generated by AI</p>
+    <p>© 2026 VoteFlux Daily Intelligence | Generated by AI | 本報告僅供參考，不構成任何投資建議</p>
 </div>
 
 </body>
@@ -387,13 +480,14 @@ def main():
     print(f"🤖 VoteFlux 每日戰報 — {TODAY_STR}")
     print("=" * 50)
 
-    # Step 1: 用 GPT-4o 產生報告資料（JSON）
+    # Step 1: GPT-4o 產生報告資料（JSON）
     print("\n📝 正在產生報告資料（GPT-4o → JSON）...")
     try:
         report_data = generate_report_data()
+        print("✅ JSON 解析成功")
     except (json.JSONDecodeError, KeyError, IndexError) as e:
         print(f"❌ JSON 解析失敗: {e}")
-        send_telegram(f"⚠️ <b>VoteFlux 每日戰報 — {TODAY_STR}</b>\n\n報告 JSON 解析失敗，請手動檢查。")
+        send_telegram(f"⚠️ <b>VoteFlux 每日戰報 — {TODAY_STR}</b>\n\n報告產生失敗，請手動檢查 Action log。")
         return
 
     # Step 2: 組裝 HTML
