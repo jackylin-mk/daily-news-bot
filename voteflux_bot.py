@@ -72,6 +72,11 @@ def generate_report_data() -> dict:
 1. **DAILY DISCOVERY**
    先找一個我可能沒聽過的預測市場平台（不能是 Polymarket、Kalshi、VoteFlux、Hyperliquid、Predict.fun），
    簡單介紹它，然後用你老玩家的直覺評價它值不值得花時間研究。
+   
+   ⚠️ 非常重要：你推薦的平台必須是真實存在、目前仍在運營的平台。網址必須是真實可連線的 URL。
+   絕對不要編造不存在的平台或虛構網址。如果你不確定某個平台是否還在運營，就換一個你確定的。
+   以下是一些真實存在的候選平台供你參考（但不限於此）：
+   Metaculus, Manifold Markets, Hedgehog Markets, PredictIt, Drift Protocol, Azuro, PlotX, Zeitgeist, Omen, Futuur, Smarkets, Betfair Exchange, Insight Prediction, Iowa Electronic Markets, Fantasy Top, Thales Market, Overtime Markets
 
 2. **競品深度分析**
    對以下 6 個平台做分析，你來決定用哪些維度。
