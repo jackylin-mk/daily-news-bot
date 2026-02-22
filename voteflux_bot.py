@@ -1,8 +1,8 @@
 """
 VoteFlux 每日戰報
-- 使用 OpenAI API (GPT-4o) 搜尋與分析預測市場
+- 使用 OpenAI API (GPT-4o) 分析預測市場
 - 產生完整 HTML 報告部署到 GitHub Pages
-- 推播精簡摘要 + 連結到 Telegram
+- 推播報告連結到 Telegram
 """
 
 import os
@@ -99,54 +99,12 @@ def generate_full_report() -> str:
     return call_openai(SYSTEM_PROMPT, user_prompt, model="gpt-4o")
 
 
-def generate_telegram_summary() -> str:
-    """產生 Telegram 精簡摘要"""
-
-    user_prompt = f"""現在是 {TODAY_STR}，請產生一份「VoteFlux 每日戰報」的 Telegram 精簡摘要。
-
-內容須包含：
-1. 🔍 DAILY DISCOVERY：今天發現的新預測市場平台（1-2 句簡評）
-2. 📊 六大平台評分快覽：VoteFlux / Kalshi / Hyperliquid / Predict.fun / Polymarket / 隨機競品，每個用一個總分表示（例：⭐ 7.2/10）
-3. 🎯 今日關鍵行動建議：最重要的 3 條建議
-4. 🌏 熱門預測題目精選：從 6 大市場各挑 1 題最火的
-
-格式要求（非常重要，請嚴格遵守）：
-- 只能使用這些 HTML 標籤：<b> <i> <u> <s> <a href=""> <code> <pre>
-- 絕對不要使用 <p> <div> <span> <h1> <h2> <h3> <ul> <ol> <li> <br> <table> <tr> <td> <th> <img> <hr> <header> <section> <font> 等標籤
-- 換行直接用換行符號，不要用 <br> 或 <br/>
-- 列表用 • 符號開頭，不要用 HTML 列表標籤
-- 總長度控制在 3500 字元以內
-- 風格簡潔犀利，像戰報一樣
-- 結尾提醒「完整報告請點連結」
-- 不要用 markdown 代碼塊包裹，直接輸出文字
-"""
-    return call_openai(SYSTEM_PROMPT, user_prompt, model="gpt-4o-mini")
-
-
 # ─── HTML 檔案處理 ────────────────────────────────────────
 def clean_html(raw: str) -> str:
     """清理 AI 回傳的 HTML（移除 markdown 包裹）"""
     raw = re.sub(r'^```html?\s*\n?', '', raw.strip())
     raw = re.sub(r'\n?```\s*$', '', raw.strip())
     return raw.strip()
-
-
-def sanitize_telegram_html(text: str) -> str:
-    """移除 Telegram 不支援的 HTML 標籤，只保留允許的標籤"""
-    allowed_tags = {'b', 'i', 'u', 's', 'a', 'code', 'pre', 'em', 'strong'}
-
-    def replace_tag(match):
-        full = match.group(0)
-        tag_name = match.group(1).split()[0].strip('/').lower()
-        if tag_name in allowed_tags:
-            return full  # 保留允許的標籤
-        return ''  # 移除不允許的標籤
-
-    result = re.sub(r'<(/?\w[^>]*)>', replace_tag, text)
-
-    # 清理多餘空行
-    result = re.sub(r'\n{4,}', '\n\n\n', result)
-    return result.strip()
 
 
 def save_html_report(html_content: str) -> str:
@@ -174,10 +132,8 @@ def save_html_report(html_content: str) -> str:
 
 # ─── Telegram 發送 ───────────────────────────────────────
 def send_telegram(text: str):
-    """發送訊息到 Telegram，如果 HTML 解析失敗則改用純文字"""
+    """發送訊息到 Telegram"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
-    # 先嘗試用 HTML 格式發送
     body = json.dumps({
         "chat_id": TELEGRAM_CHAT_ID,
         "text": text,
@@ -187,30 +143,11 @@ def send_telegram(text: str):
 
     req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
 
-    try:
-        with urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read().decode())
-            if not result.get("ok"):
-                raise RuntimeError(f"Telegram API 錯誤: {result}")
-        print("✅ Telegram 摘要已發送（HTML 格式）！")
-    except Exception as e:
-        print(f"⚠️ HTML 格式發送失敗: {e}")
-        print("🔄 改用純文字格式重試...")
-
-        # 移除所有 HTML 標籤，改用純文字發送
-        plain_text = re.sub(r'<[^>]+>', '', text)
-        body = json.dumps({
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": plain_text,
-            "disable_web_page_preview": False,
-        }).encode("utf-8")
-
-        req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-        with urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read().decode())
-            if not result.get("ok"):
-                raise RuntimeError(f"Telegram API 純文字也失敗: {result}")
-        print("✅ Telegram 摘要已發送（純文字格式）！")
+    with urlopen(req, timeout=15) as resp:
+        result = json.loads(resp.read().decode())
+        if not result.get("ok"):
+            raise RuntimeError(f"Telegram API 錯誤: {result}")
+    print("✅ Telegram 訊息已發送！")
 
 
 # ─── 主程式 ──────────────────────────────────────────────
@@ -225,25 +162,12 @@ def main():
     html_content = clean_html(raw_html)
     save_html_report(html_content)
 
-    # Step 2: 產生 Telegram 精簡摘要
-    print("\n💬 正在產生 Telegram 摘要（GPT-4o-mini）...")
-    raw_summary = generate_telegram_summary()
-    summary = clean_html(raw_summary)
-
-    # 清理不支援的 HTML 標籤
-    summary = sanitize_telegram_html(summary)
-
-    # 加上完整報告連結
+    # Step 2: 推播報告連結到 Telegram
     report_url = f"{GITHUB_PAGES_URL}/voteflux-{TODAY_FILE}.html"
-    summary += f"\n\n🔗 <a href=\"{report_url}\">📖 查看完整 HTML 報告</a>"
+    message = f"🤖 <b>VoteFlux 每日戰報 — {TODAY_STR}</b>\n\n🔗 <a href=\"{report_url}\">📖 查看完整報告</a>"
 
-    # Telegram 4096 字元限制
-    if len(summary) > 4096:
-        summary = summary[:4080] + "\n\n..."
-
-    # Step 3: 推播到 Telegram
     print("\n📤 正在推播到 Telegram...")
-    send_telegram(summary)
+    send_telegram(message)
 
     print("\n🎉 VoteFlux 每日戰報完成！")
 
