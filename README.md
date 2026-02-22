@@ -38,7 +38,7 @@
 
 | 區塊 | 內容 |
 |------|------|
-| 🔍 **DAILY DISCOVERY** | 每天挖掘一個冷門預測市場平台 + 老玩家真實評價 |
+| 🔍 **DAILY DISCOVERY** | 每天從真實平台候選池中挖掘一個競品 + 老玩家真實評價 |
 | 📊 **競品評分總覽** | 6 大平台 × AI 自選維度，1-10 分顏色標示 |
 | 🔬 **各平台詳細點評** | 每個維度的分數與一句話犀利點評 + 總結 |
 | 📝 **今日觀察與碎碎念** | 第一人稱的市場觀察，像老手寫交易日記 |
@@ -56,7 +56,13 @@
 | 3 | **VoteFlux** | 主體分析對象 |
 | 4 | **Hyperliquid** | Outcome Trading |
 | 5 | **Predict.fun** | DeFi 生息預測 |
-| 6 | **每日隨機競品** | DAILY DISCOVERY 發現的平台 |
+| 6 | **每日隨機競品** | 從候選池挑選（見下方） |
+
+### DAILY DISCOVERY 候選池
+
+AI 從以下真實平台中挑選（不限於此清單）：
+
+> Metaculus · Manifold Markets · Hedgehog Markets · PredictIt · Drift Protocol · Azuro · PlotX · Zeitgeist · Omen · Futuur · Smarkets · Betfair Exchange · Insight Prediction · Iowa Electronic Markets · Fantasy Top · Thales Market · Overtime Markets
 
 ### 分析維度
 
@@ -148,6 +154,10 @@ schedule:
 ### 修改戰報風格
 
 編輯 `voteflux_bot.py` 中的 `SYSTEM_PROMPT`（角色設定）和 `generate_report_data()` 內的 prompt（報告指令）。
+
+### 修改 DAILY DISCOVERY 候選池
+
+編輯 `voteflux_bot.py` 中 prompt 裡的候選平台清單，新增或移除平台。
 
 ---
 
