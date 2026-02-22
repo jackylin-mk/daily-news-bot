@@ -1,11 +1,28 @@
 # 📰 每日新聞摘要 Telegram Bot
 
-每天早上自動抓取台灣綜合、國際、科技、財經新聞，透過 OpenAI GPT-4o-mini 整理重點摘要，推播到你的 Telegram。
+# 📰 每日新聞 + VoteFlux 戰報 Telegram Bot
+
+每天早上自動推播兩份報告到 Telegram：
+
+1. **📰 每日新聞摘要** — 台灣綜合、國際、科技、財經新聞，由 GPT-4o-mini 整理重點
+2. **🤖 VoteFlux 每日戰報** — 預測市場競品分析、評分表、戰略建議、目標市場題目
+
+VoteFlux 戰報同時產生完整 HTML 報告，部署到 GitHub Pages 供瀏覽。
 
 ## 🏗️ 架構
 
 ```
-RSS 新聞來源 → Python 抓取 → OpenAI API 摘要 → Telegram Bot 推播
+┌─ 新聞 Bot ──────────────────────────────────┐
+│  RSS 新聞來源 → GPT-4o-mini 摘要 → Telegram  │
+└─────────────────────────────────────────────┘
+
+┌─ VoteFlux Bot ──────────────────────────────┐
+│  GPT-4o 完整分析 → HTML 報告 → GitHub Pages  │
+│  GPT-4o-mini 摘要 → Telegram（附報告連結）     │
+└─────────────────────────────────────────────┘
+           ↑
+  GitHub Actions 每日 08:00 (台灣時間) 排程
+```
                     ↑
            GitHub Actions 每日排程
 ```
@@ -31,12 +48,12 @@ RSS 新聞來源 → Python 抓取 → OpenAI API 摘要 → Telegram Bot 推播
 
 ### 4️⃣ 部署到 GitHub
 
-1. 在 GitHub 建立一個新的 **Private** repo
+1. 在 GitHub 建立一個新的 **Public** repo（GitHub Pages 免費版需要 Public）
 2. 把本專案的檔案推上去：
    ```bash
    git init
    git add .
-   git commit -m "初始化每日新聞 Bot"
+   git commit -m "初始化每日新聞 + VoteFlux Bot"
    git remote add origin https://github.com/你的帳號/你的repo.git
    git push -u origin main
    ```
@@ -49,7 +66,13 @@ RSS 新聞來源 → Python 抓取 → OpenAI API 摘要 → Telegram Bot 推播
    | `TELEGRAM_CHAT_ID` | 你的 Chat ID |
    | `OPENAI_API_KEY` | 你的 OpenAI API Key |
 
-### 5️⃣ 測試
+### 5️⃣ 啟用 GitHub Pages
+
+1. 到 repo 的 **Settings → Pages**
+2. Source 選擇 **GitHub Actions**
+3. 儲存
+
+### 6️⃣ 測試
 
 到 repo 的 **Actions** 分頁 → 選擇「每日新聞推播」→ 點 **Run workflow** 手動執行一次，確認 Telegram 有收到訊息。
 
@@ -85,17 +108,31 @@ schedule:
 |------|------|
 | GitHub Actions | ✅ 免費（公開/私人 repo 每月 2000 分鐘） |
 | Telegram Bot API | ✅ 免費 |
-| OpenAI API | 約 $0.005-0.01 / 天（使用 GPT-4o-mini） |
+| OpenAI API | 約 $0.03-0.06 / 天（新聞用 mini + 戰報用 GPT-4o） |
 
-**每月不到 $0.5 美元**，非常便宜。
+**每月約 $1 ~ $2 美元**，非常便宜。
 
 ## 📁 檔案結構
 
 ```
 daily-news-bot/
-├── news_bot.py                    # 主程式
+├── news_bot.py                    # 每日新聞摘要
+├── voteflux_bot.py                # VoteFlux 每日戰報
+├── reports/                       # HTML 報告（自動產生，部署到 GitHub Pages）
+│   ├── index.html                 # 自動跳轉最新報告
+│   └── voteflux-YYYY-MM-DD.html  # 每日報告
 ├── .github/
 │   └── workflows/
 │       └── daily-news.yml         # GitHub Actions 排程
 └── README.md                      # 本文件
 ```
+
+## 📡 VoteFlux 戰報內容
+
+每日自動產生的戰報包含：
+
+- **DAILY DISCOVERY** — 每天發現一個新的預測市場平台
+- **六大平台深度分析** — VoteFlux / Kalshi / Hyperliquid / Predict.fun / Polymarket + 隨機競品
+- **多維度評分表（1-10）** — ADV、流動性、費率滑點、盤口多樣性、客服
+- **戰略行動建議** — 結合合規、Outcome Trading、DeFi 生息三大邏輯
+- **目標市場預測題目** — 印度、孟加拉、越南、馬來西亞、菲律賓、泰國各 2 題
