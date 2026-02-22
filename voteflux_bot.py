@@ -1,6 +1,6 @@
 """
 VoteFlux 每日戰報
-- 使用 OpenAI API (GPT-4o) 分析預測市場
+- 使用 Google Gemini API 分析預測市場
 - 產生完整 HTML 報告部署到 GitHub Pages
 - 推播報告連結到 Telegram
 """
@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 # ─── 設定 ───────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 GITHUB_PAGES_URL = os.environ.get("GITHUB_PAGES_URL", "https://你的帳號.github.io/daily-news-bot")
 
 TW_TZ = timezone(timedelta(hours=8))
@@ -23,82 +23,81 @@ TODAY_STR = TODAY.strftime("%Y/%m/%d (%A)")
 TODAY_FILE = TODAY.strftime("%Y-%m-%d")
 
 
-# ─── OpenAI API 呼叫 ────────────────────────────────────
-def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o") -> str:
-    """呼叫 OpenAI API"""
+# ─── Gemini API 呼叫 ────────────────────────────────────
+def call_gemini(prompt: str, model: str = "gemini-2.0-flash") -> str:
+    """呼叫 Google Gemini API"""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+
     body = json.dumps({
-        "model": model,
-        "max_tokens": 4096,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+        "contents": [
+            {
+                "parts": [{"text": prompt}]
+            }
         ],
+        "generationConfig": {
+            "maxOutputTokens": 8192,
+            "temperature": 0.7,
+        },
     }).encode("utf-8")
 
     req = Request(
-        "https://api.openai.com/v1/chat/completions",
+        url,
         data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-        },
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
 
     with urlopen(req, timeout=120) as resp:
         data = json.loads(resp.read().decode())
 
-    return data["choices"][0]["message"]["content"]
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
-# ─── 系統 Prompt ─────────────────────────────────────────
-SYSTEM_PROMPT = """你是一位具備 10 年經驗的「資深預測市場分析師」兼「金融科技戰略顧問」。
-你專注於 Event Contract 和 Prediction Market 產業的競品研究與策略規劃。
-你的風格專業、犀利、注重數據，並對 Web3 與傳統金融市場有極深洞見。
-所有輸出皆使用繁體中文。"""
-
-
+# ─── 報告產生 ────────────────────────────────────────────
 def generate_full_report() -> str:
     """產生完整 HTML 報告"""
 
-    user_prompt = f"""現在是 {TODAY_STR}，請執行每日市場研究報告。
+    prompt = f"""你是一位具備 10 年經驗的「資深預測投注玩家」兼「金融科技戰略分析師」。
+你的風格硬核、犀利、注重數據，並對 Web3 與傳統博彩市場有極深洞見。
+所有輸出皆使用繁體中文。
+
+現在是 {TODAY_STR}，請執行每日戰報（Run Daily Report）。
 
 請嚴格執行以下步驟並直接輸出完整 HTML 代碼：
 
 1. **DAILY DISCOVERY：**
-   找出一個除了 Kalshi, Hyperliquid, Predict.fun, Polymarket 之外的「預測市場平台（Prediction Market Platform）」作為當日隨機競品。
-   包含平台簡述與專業分析師點評。
+   找出一個除了 Kalshi, Hyperliquid, Predict.fun, Polymarket 之外的「預測投注網站」作為當日隨機競品。
+   包含簡述與資深玩家點評。
 
 2. **全球競品深度分析：**
-   主體：VoteFlux（一個 Event Contract 平台）。
+   主體：VoteFlux。
    必列對象：Kalshi, Hyperliquid, Predict.fun, Polymarket, 以及當日隨機競品（共 6 個）。
-   站在「專業交易者」角度，分析市場流動性、手續費結構、以及合約反應速度。
+   站在「職業玩家」角度，分析流動性、費率滑點、以及盤口反應速度。
 
 3. **客服功能評分表：**
    以表格呈現，指標包含：
    - 網站內嵌即時對話框客服
-   - 提供即時通訊軟體客服（如 Telegram）
-   - 提供非即時客服（如 email）
+   - 提供即時通訊軟體客服 (如Telegram)
+   - 提供非即時客服 (如email)
 
 4. **戰略行動建議（Action Plan）：**
-   結合 Kalshi（合規化路線）、Hyperliquid（Outcome Trading 模式）、Predict.fun（DeFi 收益機制）三大邏輯，
-   為 VoteFlux 提供具體可執行的產品與營運策略建議。
+   結合 Kalshi（合規）、Hyperliquid（Outcome Trading）、Predict.fun（DeFi 生息）三大邏輯，
+   為 VoteFlux 提供具體可執行的戰術建議。
 
-5. **目標市場預測題目建議：**
-   針對 6 大目標市場（印度、孟加拉、越南、馬來西亞、菲律賓、泰國），
-   各提供 2 個當日或當週的熱門 Event Contract 題目（例如選舉結果、經濟指標、體育賽事結果等）。
+5. **目標市場預測題目：**
+   針對 6 大市場（印度、孟加拉、越南、馬來西亞、菲律賓、泰國）各提供 2 題當日或當週的熱點預測題目。
 
 **輸出要求：**
 - 直接輸出完整可用的 HTML 代碼（包含 <!DOCTYPE html>）
 - 深色主題（Dark Mode），背景 #0d1117，文字 #c9d1d9
-- 專業分析師風格、圖表化呈現
+- 資深分析師風格、圖表化呈現
 - 使用 CSS Grid/Flexbox 排版，表格有邊框和 hover 效果
 - 頂部要有 VoteFlux 標題和日期
 - 不要使用任何外部 CSS/JS 框架，純 HTML+CSS+inline JS
 - 確保 HTML 是完整且可直接在瀏覽器開啟的
 - 不要用 markdown 代碼塊包裹，直接輸出 HTML
 """
-    return call_openai(SYSTEM_PROMPT, user_prompt, model="gpt-4o")
+    return call_gemini(prompt)
 
 
 # ─── HTML 檔案處理 ────────────────────────────────────────
@@ -159,14 +158,13 @@ def main():
     print("=" * 50)
 
     # Step 1: 產生完整 HTML 報告
-    print("\n📝 正在產生完整 HTML 報告（GPT-4o）...")
+    print("\n📝 正在產生完整 HTML 報告（Gemini）...")
     raw_html = generate_full_report()
     html_content = clean_html(raw_html)
 
     # 檢查是否為拒絕回應
-    if html_content.startswith("I'm sorry") or html_content.startswith("I cannot") or len(html_content) < 200:
-        print(f"⚠️ AI 回傳異常: {html_content[:100]}")
-        # 仍然發送通知到 Telegram
+    if len(html_content) < 200 or not html_content.strip().startswith("<!"):
+        print(f"⚠️ AI 回傳異常: {html_content[:200]}")
         send_telegram(f"⚠️ <b>VoteFlux 每日戰報 — {TODAY_STR}</b>\n\n報告產生失敗，請手動檢查。")
         return
 
