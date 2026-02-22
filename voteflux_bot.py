@@ -73,13 +73,11 @@ def generate_full_report() -> str:
    必列對象：Kalshi, Hyperliquid, Predict.fun, Polymarket, 以及當日隨機競品（共 6 個）。
    站在「職業玩家」角度，分析流動性、費率滑點、以及盤口反應速度。
 
-3. **多維度評分表（1-10分）：**
+3. **客服功能評分表：**
    以表格呈現，指標包含：
-   - 平均每日投注量能 (ADV)
-   - 流動性與深度
-   - 賠率與交易摩擦（費率/滑點）
-   - 盤口多樣性與上新速度
-   - 客戶服務友善度
+   - 網站內嵌即時對話框客服
+   - 提供即時通訊軟體客服 (如Telegram)
+   - 提供非即時客服 (如email) 
 
 4. **戰略行動建議（Action Plan）：**
    結合 Kalshi（合規）、Hyperliquid（Outcome Trading）、Predict.fun（DeFi 生息）三大邏輯，
@@ -94,7 +92,6 @@ def generate_full_report() -> str:
 - 資深分析師風格、圖表化呈現
 - 使用 CSS Grid/Flexbox 排版，表格有邊框和 hover 效果
 - 頂部要有 VoteFlux 標題和日期
-- 評分表用顏色區分（綠色 8-10、黃色 5-7、紅色 1-4）
 - 不要使用任何外部 CSS/JS 框架，純 HTML+CSS+inline JS
 - 確保 HTML 是完整且可直接在瀏覽器開啟的
 - 不要用 markdown 代碼塊包裹，直接輸出 HTML
