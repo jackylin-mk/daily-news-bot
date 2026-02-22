@@ -193,7 +193,7 @@ def main():
     summary = clean_html(raw_summary)
 
     # 加上完整報告連結
-    report_url = f"{GITHUB_PAGES_URL}/reports/voteflux-{TODAY_FILE}.html"
+    report_url = f"{GITHUB_PAGES_URL}/voteflux-{TODAY_FILE}.html"
     summary += f"\n\n🔗 <a href=\"{report_url}\">📖 查看完整 HTML 報告</a>"
 
     # Telegram 4096 字元限制
