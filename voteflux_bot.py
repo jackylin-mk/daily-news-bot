@@ -1,6 +1,6 @@
 """
 VoteFlux 每日戰報
-- 使用 Google Gemini API 分析預測市場
+- 使用 OpenAI API (GPT-4o) 分析預測市場
 - 產生完整 HTML 報告部署到 GitHub Pages
 - 推播報告連結到 Telegram
 """
@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 # ─── 設定 ───────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 GITHUB_PAGES_URL = os.environ.get("GITHUB_PAGES_URL", "https://你的帳號.github.io/daily-news-bot")
 
 TW_TZ = timezone(timedelta(hours=8))
@@ -23,45 +23,44 @@ TODAY_STR = TODAY.strftime("%Y/%m/%d (%A)")
 TODAY_FILE = TODAY.strftime("%Y-%m-%d")
 
 
-# ─── Gemini API 呼叫 ────────────────────────────────────
-def call_gemini(prompt: str, model: str = "gemini-2.0-flash") -> str:
-    """呼叫 Google Gemini API"""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
-
+# ─── OpenAI API 呼叫 ────────────────────────────────────
+def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o") -> str:
+    """呼叫 OpenAI API"""
     body = json.dumps({
-        "contents": [
-            {
-                "parts": [{"text": prompt}]
-            }
+        "model": model,
+        "max_tokens": 4096,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ],
-        "generationConfig": {
-            "maxOutputTokens": 8192,
-            "temperature": 0.7,
-        },
     }).encode("utf-8")
 
     req = Request(
-        url,
+        "https://api.openai.com/v1/chat/completions",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+        },
         method="POST",
     )
 
     with urlopen(req, timeout=120) as resp:
         data = json.loads(resp.read().decode())
 
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    return data["choices"][0]["message"]["content"]
 
 
-# ─── 報告產生 ────────────────────────────────────────────
+# ─── 系統 Prompt ─────────────────────────────────────────
+SYSTEM_PROMPT = """你是一位具備 10 年經驗的「資深預測投注玩家」兼「金融科技戰略分析師」。
+你的風格硬核、犀利、注重數據，並對 Web3 與傳統博彩市場有極深洞見。
+所有輸出皆使用繁體中文。"""
+
+
 def generate_full_report() -> str:
     """產生完整 HTML 報告"""
 
-    prompt = f"""你是一位具備 10 年經驗的「資深預測投注玩家」兼「金融科技戰略分析師」。
-你的風格硬核、犀利、注重數據，並對 Web3 與傳統博彩市場有極深洞見。
-所有輸出皆使用繁體中文。
-
-現在是 {TODAY_STR}，請執行每日戰報（Run Daily Report）。
+    user_prompt = f"""現在是 {TODAY_STR}，請執行每日戰報（Run Daily Report）。
 
 請嚴格執行以下步驟並直接輸出完整 HTML 代碼：
 
@@ -97,7 +96,7 @@ def generate_full_report() -> str:
 - 確保 HTML 是完整且可直接在瀏覽器開啟的
 - 不要用 markdown 代碼塊包裹，直接輸出 HTML
 """
-    return call_gemini(prompt)
+    return call_openai(SYSTEM_PROMPT, user_prompt, model="gpt-4o")
 
 
 # ─── HTML 檔案處理 ────────────────────────────────────────
@@ -158,11 +157,11 @@ def main():
     print("=" * 50)
 
     # Step 1: 產生完整 HTML 報告
-    print("\n📝 正在產生完整 HTML 報告（Gemini）...")
+    print("\n📝 正在產生完整 HTML 報告（GPT-4o）...")
     raw_html = generate_full_report()
     html_content = clean_html(raw_html)
 
-    # 檢查是否為拒絕回應
+    # 檢查是否為拒絕回應或異常內容
     if len(html_content) < 200 or not html_content.strip().startswith("<!"):
         print(f"⚠️ AI 回傳異常: {html_content[:200]}")
         send_telegram(f"⚠️ <b>VoteFlux 每日戰報 — {TODAY_STR}</b>\n\n報告產生失敗，請手動檢查。")
