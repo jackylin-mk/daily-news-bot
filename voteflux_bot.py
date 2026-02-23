@@ -242,7 +242,7 @@ def generate_report_data(platform_data: list[dict]) -> dict:
       "title": "新聞標題",
       "summary": "新聞摘要（2-3句，客觀描述事件）",
       "reporter_comment": "記者短評（一句話，有洞察力）",
-      "source_url": "原文連結（若有）",
+      "source_url": "原文完整 URL（必須以 https:// 開頭；若不確定請填空字串 \"\"，絕對不要填 example.com 或假網址）",
       "importance": "high/medium/low"
     }}
   ],
@@ -321,8 +321,9 @@ def build_html(data: dict) -> str:
         imp_icon, imp_label = IMPORTANCE_LABELS.get(imp, ("⚪", "參考"))
         color = get_platform_color(item.get("platform", ""))
         source_link = ""
-        if item.get("source_url"):
-            source_link = f'<a href="{item["source_url"]}" target="_blank" class="source-link">原文 →</a>'
+        raw_url = item.get("source_url", "") or ""
+        if raw_url.startswith("http://") or raw_url.startswith("https://"):
+            source_link = f'<a href="{raw_url}" target="_blank" class="source-link">原文 →</a>'
 
         news_cards += f"""
         <div class="news-card importance-{imp}">
