@@ -1,8 +1,6 @@
 name: VoteFlux 每日戰報
 
 on:
-  schedule:
-    - cron: '0 0 * * *'  # UTC 00:00 = 台灣 08:00
   workflow_dispatch:
 
 permissions:
@@ -13,6 +11,8 @@ permissions:
 jobs:
   generate-report:
     runs-on: ubuntu-latest
+    outputs:
+      report_generated: ${{ steps.check.outputs.exists }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,6 +23,8 @@ jobs:
           python-version: '3.12'
 
       - name: Run VoteFlux Bot
+        id: bot
+        continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -30,13 +32,26 @@ jobs:
           GITHUB_PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: python voteflux_bot.py
 
+      - name: Check if report was generated
+        id: check
+        run: |
+          if [ -d "reports" ] && [ "$(ls -A reports)" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ reports 資料夾存在"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "❌ reports 資料夾不存在，跳過部署"
+          fi
+
       - name: Upload Pages artifact
+        if: steps.check.outputs.exists == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports
 
   deploy-pages:
     needs: generate-report
+    if: needs.generate-report.outputs.report_generated == 'true'
     runs-on: ubuntu-latest
     permissions:
       pages: write
