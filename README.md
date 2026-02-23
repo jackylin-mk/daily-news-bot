@@ -1,6 +1,6 @@
 # 🤖 Daily News + VoteFlux Intelligence Bot
 
-> 每天早上自動推播新聞摘要與預測市場競品戰報到 Telegram，零人工介入。
+> 每天早上 08:00 準時推播新聞摘要與預測市場競品戰報到 Telegram，零人工介入。
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Bot | 說明 | AI 模型 | 輸出 |
 |-----|------|---------|------|
-| 📰 **每日新聞摘要** | 台灣綜合 · 國際 · 科技 · 財經 | GPT-4o-mini | Telegram 訊息 |
+| 📰 **每日新聞摘要** | 台灣綜合 · 國際 · 科技 · 財經 | GPT-4o-mini | Telegram 訊息（多人推播） |
 | 📊 **VoteFlux 每日戰報** | 預測市場競品分析（資深玩家視角） | GPT-4o | GitHub Pages + Telegram 連結 |
 
 ---
@@ -16,17 +16,24 @@
 ## 🏗️ 系統架構
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  📰 News Bot                                             │
-│  RSS 新聞來源 → GPT-4o-mini 摘要 → Telegram 推播         │
-├──────────────────────────────────────────────────────────┤
-│  📊 VoteFlux Bot                                         │
-│  GPT-4o 分析 (JSON) → Python 組裝 HTML → GitHub Pages    │
-│                                          → Telegram 連結  │
-└──────────────────────────────────────────────────────────┘
-                          ⬆
-            GitHub Actions ─ 每日 08:00 (台灣時間)
+┌─────────────────────────────────────────────────────────────┐
+│  ⏰ Cloudflare Workers Cron                                  │
+│  每天 UTC 00:00（台灣 08:00）準時觸發 GitHub Actions          │
+└──────────────────────┬──────────────────────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────────────────────┐
+│  📰 News Bot (GitHub Actions)                                │
+│  RSS 新聞來源 → GPT-4o-mini 摘要 → Telegram 推播（多人）      │
+├──────────────────────────────────────────────────────────────┤
+│  📊 VoteFlux Bot (GitHub Actions)                            │
+│  GPT-4o 分析 (JSON) → Python 組裝 HTML → GitHub Pages        │
+│                                          → Telegram 連結      │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+### 為什麼用 Cloudflare Workers？
+
+GitHub Actions 免費排程有 5~30 分鐘延遲。改用 Cloudflare Workers Cron Trigger 後，**誤差在 1 秒內**，且完全免費。
 
 ---
 
@@ -47,8 +54,6 @@
 
 ### 競品清單
 
-每日報告固定分析 6 個平台：
-
 | # | 平台 | 類型 |
 |---|------|------|
 | 1 | **Polymarket** | 鏈上預測市場龍頭 |
@@ -59,8 +64,6 @@
 | 6 | **每日隨機競品** | 從候選池挑選（見下方） |
 
 ### DAILY DISCOVERY 候選池
-
-AI 從以下真實平台中挑選（不限於此清單）：
 
 > Metaculus · Manifold Markets · Hedgehog Markets · PredictIt · Drift Protocol · Azuro · PlotX · Zeitgeist · Omen · Futuur · Smarkets · Betfair Exchange · Insight Prediction · Iowa Electronic Markets · Fantasy Top · Thales Market · Overtime Markets
 
@@ -88,6 +91,7 @@ AI 從以下真實平台中挑選（不限於此清單）：
    https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
    ```
 3. 找到 `"chat":{"id": 數字}` → 那個數字就是 **Chat ID**
+4. 多人推播：用逗號分隔多個 Chat ID（例如 `123456,789012`）
 
 ### Step 3 ─ 取得 OpenAI API Key
 
@@ -111,19 +115,40 @@ git push -u origin main
 | Secret 名稱 | 值 |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Bot Token |
-| `TELEGRAM_CHAT_ID` | Chat ID |
+| `TELEGRAM_CHAT_ID` | Chat ID（多人用逗號分隔） |
 | `OPENAI_API_KEY` | OpenAI API Key |
 
 ### Step 6 ─ 啟用 GitHub Pages
 
 **Settings → Pages → Source** 選擇 **GitHub Actions** → 儲存
 
-### Step 7 ─ 測試 🎉
+### Step 7 ─ 部署 Cloudflare Workers（準時排程）
 
-到 **Actions** 分頁，分別手動執行：
+1. 註冊 [dash.cloudflare.com](https://dash.cloudflare.com/)（免費）
+2. 到 **Workers & Pages → Create application → Start with Hello World**
+3. Worker name 設為 `daily-bot-trigger`，點 Deploy
+4. 進入 **Edit code**，將程式碼替換為 `cloudflare-worker/worker.js` 的內容，Deploy
+5. 到 **Settings → Trigger Events → Cron Triggers**，新增：`0 0 * * *`
+6. 到 **Settings → Variables and Secrets**，新增：
 
-- `每日新聞推播` → 確認 Telegram 收到新聞摘要
-- `VoteFlux 每日戰報` → 確認 Telegram 收到報告連結
+   | 名稱 | 值 |
+   |------|-----|
+   | `GITHUB_OWNER` | 你的 GitHub 帳號 |
+   | `GITHUB_REPO` | `daily-news-bot` |
+   | `GITHUB_TOKEN` | GitHub Personal Access Token（需 Actions read/write 權限） |
+
+### Step 8 ─ 產生 GitHub Personal Access Token
+
+1. 到 [github.com/settings/tokens?type=beta](https://github.com/settings/tokens?type=beta)
+2. **Generate new token** → Fine-grained token
+3. Repository access → **Only select repositories** → 選 `daily-news-bot`
+4. Permissions → **Actions** → **Read and write**
+5. Generate → 複製貼到 Cloudflare 的 `GITHUB_TOKEN`
+
+### Step 9 ─ 測試 🎉
+
+- **手動測試**：GitHub Actions 頁面 → Run workflow
+- **排程測試**：Cloudflare Edit code → Schedule → Trigger scheduled event
 
 ---
 
@@ -131,12 +156,7 @@ git push -u origin main
 
 ### 修改推播時間
 
-編輯 `.github/workflows/` 裡的 cron：
-
-```yaml
-schedule:
-  - cron: '0 0 * * *'   # UTC 00:00 = 台灣 08:00
-```
+編輯 Cloudflare Worker 的 **Cron Triggers**：
 
 | 台灣時間 | cron |
 |---------|------|
@@ -145,19 +165,21 @@ schedule:
 | 09:00 | `0 1 * * *` |
 | 12:00 | `0 4 * * *` |
 
-> ⚠️ GitHub Actions 排程可能有 5~30 分鐘延遲，這是免費方案的已知限制。
-
 ### 修改新聞來源
 
 編輯 `news_bot.py` 中的 `RSS_FEEDS` 字典。
 
 ### 修改戰報風格
 
-編輯 `voteflux_bot.py` 中的 `SYSTEM_PROMPT`（角色設定）和 `generate_report_data()` 內的 prompt（報告指令）。
+編輯 `voteflux_bot.py` 中的 `SYSTEM_PROMPT`（角色設定）和 `generate_report_data()` 內的 prompt。
 
 ### 修改 DAILY DISCOVERY 候選池
 
-編輯 `voteflux_bot.py` 中 prompt 裡的候選平台清單，新增或移除平台。
+編輯 `voteflux_bot.py` 中 prompt 裡的候選平台清單。
+
+### 新增推播對象
+
+編輯 GitHub Secret `TELEGRAM_CHAT_ID`，用逗號加入新的 Chat ID。
 
 ---
 
@@ -165,9 +187,12 @@ schedule:
 
 ```
 daily-news-bot/
-├── 📄 news_bot.py                        # 每日新聞摘要 Bot
+├── 📄 news_bot.py                        # 每日新聞摘要 Bot（支援多人推播）
 ├── 📄 voteflux_bot.py                    # VoteFlux 每日戰報 Bot
 ├── 📄 README.md
+├── 📂 cloudflare-worker/                  # Cloudflare Workers 準時觸發器
+│   ├── worker.js                          #   觸發 GitHub Actions 的程式碼
+│   └── wrangler.toml                      #   Wrangler 設定檔（參考用）
 ├── 📂 reports/                            # ← 自動產生，不需手動建立
 │   ├── index.html                         #    跳轉最新報告
 │   └── voteflux-YYYY-MM-DD.html          #    每日 HTML 報告
@@ -182,6 +207,7 @@ daily-news-bot/
 
 | 項目 | 費用 |
 |------|------|
+| Cloudflare Workers | ✅ 免費（每日 10 萬次請求） |
 | GitHub Actions | ✅ 免費（每月 2,000 分鐘） |
 | GitHub Pages | ✅ 免費 |
 | Telegram Bot API | ✅ 免費 |
@@ -195,15 +221,16 @@ daily-news-bot/
 
 | 項目 | 說明 |
 |------|------|
-| **語言** | Python 3.12（零外部套件依賴） |
+| **語言** | Python 3.12（零外部套件）+ JavaScript（Worker） |
+| **排程** | Cloudflare Workers Cron（秒級精準） |
 | **新聞來源** | 自由時報 · 中央社 · ETtoday · iThome · 科技新報 等 RSS |
 | **AI 模型** | GPT-4o-mini（新聞摘要）· GPT-4o（戰報分析） |
-| **報告架構** | GPT-4o → JSON 資料 → Python 組裝 HTML 模板 |
-| **部署** | GitHub Actions 排程 + GitHub Pages 靜態托管 |
-| **推播** | Telegram Bot API（HTML 格式 + 純文字 fallback） |
+| **報告架構** | GPT-4o → JSON → Python HTML 模板 |
+| **部署** | GitHub Actions + GitHub Pages + Cloudflare Workers |
+| **推播** | Telegram Bot API（多人 · HTML + 純文字 fallback） |
 
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by Claude × GitHub Actions × OpenAI</sub>
+  <sub>Built with ❤️ by Claude × GitHub Actions × OpenAI × Cloudflare Workers</sub>
 </p>
