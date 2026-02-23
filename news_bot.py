@@ -15,7 +15,7 @@ from urllib.parse import quote
 
 # ─── 設定 ───────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.environ["TELEGRAM_CHAT_ID"].split(",")]
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 # 台灣時間
@@ -168,22 +168,28 @@ def call_ai(prompt: str) -> str:
 
 
 def send_telegram(text: str):
-    """發送訊息到 Telegram"""
+    """發送訊息到所有 Telegram 用戶"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    body = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
-    }).encode("utf-8")
 
-    req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    for chat_id in TELEGRAM_CHAT_IDS:
+        body = json.dumps({
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }).encode("utf-8")
 
-    with urlopen(req, timeout=15) as resp:
-        result = json.loads(resp.read().decode())
-        if not result.get("ok"):
-            raise RuntimeError(f"Telegram API 錯誤: {result}")
-    print("✅ 訊息已成功發送到 Telegram！")
+        req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+
+        try:
+            with urlopen(req, timeout=15) as resp:
+                result = json.loads(resp.read().decode())
+                if not result.get("ok"):
+                    print(f"⚠️ Telegram 發送失敗 (chat_id: {chat_id}): {result}")
+                else:
+                    print(f"✅ 訊息已發送到 {chat_id}")
+        except Exception as e:
+            print(f"⚠️ Telegram 發送失敗 (chat_id: {chat_id}): {e}")
 
 
 # ─── 主程式 ──────────────────────────────────────────────
