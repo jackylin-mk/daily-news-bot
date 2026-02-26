@@ -8,6 +8,7 @@
 import os
 import json
 import re
+import hashlib
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
@@ -49,6 +50,43 @@ RSS_FEEDS = {
 
 MAX_ITEMS_PER_FEED = 20  # 多抓一些，過濾日期後再限制數量
 MAX_ITEMS_PER_FEED_FINAL = 5  # 過濾後每個來源最多保留幾則
+
+SEEN_FILE = "seen_titles.json"  # 由 GitHub Actions Cache 跨天保留
+
+
+# ─── 去重複機制 ──────────────────────────────────────────
+def title_hash(title: str) -> str:
+    """將標題轉成短 hash，避免存太長的字串"""
+    return hashlib.md5(title.strip().encode("utf-8")).hexdigest()
+
+
+def load_seen() -> set:
+    """讀取已推播過的標題 hash"""
+    if os.path.exists(SEEN_FILE):
+        try:
+            with open(SEEN_FILE, "r") as f:
+                return set(json.load(f))
+        except Exception:
+            pass
+    return set()
+
+
+def save_seen(seen: set):
+    """儲存已推播的標題 hash（只保留最近 500 筆，避免無限膨脹）"""
+    seen_list = list(seen)[-500:]
+    with open(SEEN_FILE, "w") as f:
+        json.dump(seen_list, f)
+
+
+def filter_seen(items: list[dict], seen: set) -> list[dict]:
+    """過濾掉已推播過的新聞"""
+    return [item for item in items if title_hash(item["title"]) not in seen]
+
+
+def mark_seen(items: list[dict], seen: set):
+    """將本次推播的標題加入 seen"""
+    for item in items:
+        seen.add(title_hash(item["title"]))
 
 
 def is_today(pub_date_str: str) -> bool:
@@ -128,8 +166,8 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
     return items[:MAX_ITEMS_PER_FEED_FINAL]
 
 
-def fetch_all_news() -> dict[str, list[dict]]:
-    """抓取所有分類的新聞"""
+def fetch_all_news(seen: set) -> dict[str, list[dict]]:
+    """抓取所有分類的新聞，並過濾已推播過的標題"""
     all_news = {}
     for category, feeds in RSS_FEEDS.items():
         category_items = []
@@ -137,7 +175,8 @@ def fetch_all_news() -> dict[str, list[dict]]:
             try:
                 xml_text = fetch_url(feed_url)
                 fetched = parse_rss(xml_text)
-                print(f"  📌 {feed_url} → 今天共 {len(fetched)} 則")
+                fetched = filter_seen(fetched, seen)  # ← 去重複
+                print(f"  📌 {feed_url} → 今天共 {len(fetched)} 則（未推播過）")
                 category_items.extend(fetched)
             except Exception as e:
                 print(f"⚠️ 無法抓取 {feed_url}: {e}")
@@ -235,10 +274,13 @@ def send_telegram(text: str):
 # ─── 主程式 ──────────────────────────────────────────────
 def main():
     print("📡 正在抓取新聞...")
-    all_news = fetch_all_news()
+    seen = load_seen()
+    print(f"📋 已記錄 {len(seen)} 則推播過的新聞")
+
+    all_news = fetch_all_news(seen)
 
     total = sum(len(v) for v in all_news.values())
-    print(f"📰 今天共抓取 {total} 則新聞")
+    print(f"📰 今天共抓取 {total} 則新聞（未推播過）")
 
     if total == 0:
         send_telegram("⚠️ 今天無法抓取新聞，請檢查 RSS 來源。")
@@ -253,6 +295,12 @@ def main():
 
     print("📤 正在發送到 Telegram...")
     send_telegram(summary)
+
+    # 推播成功後才記錄，避免失敗時誤標為已推播
+    for items in all_news.values():
+        mark_seen(items, seen)
+    save_seen(seen)
+    print(f"💾 已記錄本次推播標題，總計 {len(seen)} 筆")
     print("🎉 完成！")
 
 
