@@ -68,9 +68,17 @@ def generate_report_data() -> dict:
     user_prompt = f"""幫我寫今天的競品日報。規則如下：
 
 1. **DAILY DISCOVERY**
-   從以下候選池挑一個平台介紹（不能是 Polymarket、Kalshi、VoteFlux、Hyperliquid、Predict.fun）。
-   必須是真實存在且仍在運營的平台，網址必須真實可連線，不確定就換一個。
+   用以下流程選出今天的 DAILY DISCOVERY 平台：
+
+   步驟一：從候選池中，挑出你認為「今天最活躍」的平台（以近期交易量、社群討論熱度、新功能上線、重大事件等為依據）。
    候選池：Metaculus, Manifold Markets, Hedgehog Markets, PredictIt, Drift Protocol, Azuro, PlotX, Zeitgeist, Omen, Futuur, Smarkets, Betfair Exchange, Insight Prediction, Iowa Electronic Markets, Fantasy Top, Thales Market, Overtime Markets
+
+   步驟二：在候選池之外，主動找一個你認為「近期值得關注」的預測市場平台（不能是 Polymarket、Kalshi、VoteFlux、Hyperliquid、Predict.fun，也不能是候選池內的平台）。
+
+   步驟三：比較步驟一和步驟二的兩個平台，選出「更活躍、更值得今天介紹」的那一個作為 DAILY DISCOVERY。
+   在 veteran_take 裡說明你的選擇理由，以及另一個落選平台的名稱和落選原因（一句話）。
+
+   ⚠️ 所選平台必須真實存在且仍在運營，網址必須真實可連線，不確定就換一個。
 
 2. **競品深度分析**
    平台：Polymarket, Kalshi, VoteFlux, Hyperliquid, Predict.fun, 加上 DAILY DISCOVERY 的平台（共 6 個）。
@@ -84,7 +92,7 @@ def generate_report_data() -> dict:
 5. **各市場熱門題目**：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，各 2 題。
 
 只輸出 JSON，結構：
-{{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":""}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
+{{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":"","runner_up":"落選平台名稱：落選原因一句話"}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
 
 competitor_analysis 必須包含 6 個平台，scores/comments 的 key 必須與 analysis_dimensions 完全一致。今天是 {TODAY_STR}。"""
 
@@ -313,6 +321,7 @@ def build_html(data: dict) -> str:
     <div class="url">{dd.get('url', '')}</div>
     <p>{dd['description']}</p>
     <div class="veteran-take">{dd['veteran_take']}</div>
+    {f'<div style="margin-top:10px;font-size:0.85em;color:#8b949e;">🥈 落選候選人：{dd["runner_up"]}</div>' if dd.get('runner_up') else ''}
 </div>
 
 <!-- 評分總覽 -->
