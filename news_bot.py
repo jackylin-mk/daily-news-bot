@@ -51,6 +51,12 @@ RSS_FEEDS = {
 MAX_ITEMS_PER_FEED = 20  # 多抓一些，過濾日期後再限制數量
 MAX_ITEMS_PER_FEED_FINAL = 5  # 過濾後每個來源最多保留幾則
 
+# ─── 黑名單（標題含這些關鍵字的新聞直接跳過）─────────────
+TITLE_BLACKLIST = [
+    "冰與火之歌",
+    "權力遊戲",
+]
+
 SEEN_FILE = "seen_titles.json"  # 由 GitHub Actions Cache 跨天保留
 
 
@@ -129,6 +135,8 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
             continue  # ← 跳過非今天的新聞
 
         title = item.findtext("title", "").strip()
+        if any(kw in title for kw in TITLE_BLACKLIST):
+            continue  # ← 黑名單過濾
         link = item.findtext("link", "").strip()
         desc = item.findtext("description", "").strip()
         desc = re.sub(r"<[^>]+>", "", desc)[:300]
@@ -156,6 +164,8 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
                     pass  # 解析失敗就保留
 
             title = entry.findtext("atom:title", "", ns).strip()
+            if any(kw in title for kw in TITLE_BLACKLIST):
+                continue  # ← 黑名單過濾
             link_el = entry.find("atom:link", ns)
             link = link_el.get("href", "") if link_el is not None else ""
             desc = entry.findtext("atom:summary", "", ns).strip()
