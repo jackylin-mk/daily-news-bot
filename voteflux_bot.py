@@ -13,7 +13,7 @@ from urllib.request import urlopen, Request
 
 # ─── 設定 ───────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.environ["TELEGRAM_CHAT_ID"].split(",")]
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 GITHUB_PAGES_URL = os.environ.get("GITHUB_PAGES_URL", "https://你的帳號.github.io/daily-news-bot")
 
@@ -379,29 +379,31 @@ def save_html_report(html_content: str) -> str:
 # ─── Telegram 發送 ───────────────────────────────────────
 def send_telegram(text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    body = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": False,
-    }).encode("utf-8")
 
-    req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    for chat_id in TELEGRAM_CHAT_IDS:
+        body = json.dumps({
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False,
+        }).encode("utf-8")
 
-    try:
-        with urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read().decode())
-            if not result.get("ok"):
-                raise RuntimeError(f"Telegram API 錯誤: {result}")
-        print("✅ Telegram 訊息已發送！")
-    except Exception as e:
-        print(f"⚠️ Telegram HTML 發送失敗: {e}")
-        plain = re.sub(r'<[^>]+>', '', text)
-        body2 = json.dumps({"chat_id": TELEGRAM_CHAT_ID, "text": plain}).encode("utf-8")
-        req2 = Request(url, data=body2, headers={"Content-Type": "application/json"}, method="POST")
-        with urlopen(req2, timeout=15) as resp2:
-            pass
-        print("✅ Telegram 訊息已發送（純文字 fallback）！")
+        req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+
+        try:
+            with urlopen(req, timeout=15) as resp:
+                result = json.loads(resp.read().decode())
+                if not result.get("ok"):
+                    raise RuntimeError(f"Telegram API 錯誤: {result}")
+            print(f"✅ 訊息已發送到 {chat_id}")
+        except Exception as e:
+            print(f"⚠️ Telegram HTML 發送失敗 (chat_id: {chat_id}): {e}")
+            plain = re.sub(r'<[^>]+>', '', text)
+            body2 = json.dumps({"chat_id": chat_id, "text": plain}).encode("utf-8")
+            req2 = Request(url, data=body2, headers={"Content-Type": "application/json"}, method="POST")
+            with urlopen(req2, timeout=15) as resp2:
+                pass
+            print(f"✅ 訊息已發送到 {chat_id}（純文字 fallback）")
 
 
 # ─── 主程式 ──────────────────────────────────────────────
