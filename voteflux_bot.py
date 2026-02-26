@@ -1,23 +1,19 @@
 """
-VoteFlux 每日產業新聞報告
-- 爬取各預測市場平台的 RSS/部落格
-- 使用 OpenAI GPT-4o 以資深新聞記者角度彙整 10-15 則重要新聞
-- 每則附短評，結尾加綜合評論
-- 產生 Dark Mode HTML 報告部署到 GitHub Pages
-- 推播報告連結到 Telegram（多人支援）
+VoteFlux 每日市場研究報告
+- 使用 OpenAI API (GPT-4o) 以資深預測投注玩家視角分析競品
+- 產生完整 HTML 報告部署到 GitHub Pages
+- 推播報告連結到 Telegram
 """
 
 import os
 import json
 import re
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
 
 # ─── 設定 ───────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.environ["TELEGRAM_CHAT_ID"].split(",")]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 GITHUB_PAGES_URL = os.environ.get("GITHUB_PAGES_URL", "https://你的帳號.github.io/daily-news-bot")
 
@@ -27,118 +23,8 @@ TODAY_STR = TODAY.strftime("%Y/%m/%d (%A)")
 TODAY_FILE = TODAY.strftime("%Y-%m-%d")
 
 
-# ─── 平台設定 ────────────────────────────────────────────
-# 固定 6 個平台（含 VoteFlux）+ 1 個隨機競品（由 GPT 決定）
-FIXED_PLATFORMS = [
-    {
-        "name": "Polymarket",
-        "url": "https://polymarket.com",
-        "rss": "https://news.polymarket.com/feed",          # Substack RSS
-        "fallback_search": "Polymarket prediction market news",
-    },
-    {
-        "name": "Kalshi",
-        "url": "https://kalshi.com",
-        "rss": "https://kalshi.com/blog/rss",
-        "fallback_search": "Kalshi prediction market news",
-    },
-    {
-        "name": "VoteFlux",
-        "url": "https://voteflux.com/en",
-        "rss": None,
-        "fallback_search": "VoteFlux prediction market news",
-    },
-    {
-        "name": "Hyperliquid",
-        "url": "https://hyperliquid.xyz",
-        "rss": None,
-        "fallback_search": "Hyperliquid DEX news announcement 2025",
-    },
-    {
-        "name": "Predict.fun",
-        "url": "https://predict.fun",
-        "rss": None,
-        "fallback_search": "Predict.fun prediction market news",
-    },
-]
-
-# DAILY DISCOVERY 候選池（真實存在的平台）
-DISCOVERY_CANDIDATES = [
-    "Metaculus", "Manifold Markets", "Hedgehog Markets", "PredictIt",
-    "Drift Protocol", "Azuro", "PlotX", "Zeitgeist", "Omen", "Futuur",
-    "Smarkets", "Betfair Exchange", "Insight Prediction",
-    "Iowa Electronic Markets", "Fantasy Top", "Thales Market", "Overtime Markets",
-]
-
-
-# ─── 工具函式 ────────────────────────────────────────────
-def fetch_url(url: str, timeout: int = 15) -> str:
-    req = Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; VoteFluxBot/2.0)",
-        "Accept": "application/rss+xml, application/xml, text/xml, */*",
-    })
-    with urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
-
-
-def parse_rss(xml_text: str, max_items: int = 8) -> list[dict]:
-    """解析 RSS/Atom，回傳 [{title, link, description, pub_date}]"""
-    items = []
-    try:
-        root = ET.fromstring(xml_text)
-    except ET.ParseError:
-        return items
-
-    ns = {"atom": "http://www.w3.org/2005/Atom"}
-
-    # RSS 2.0
-    for item in root.findall(".//item")[:max_items]:
-        title = item.findtext("title", "").strip()
-        link = item.findtext("link", "").strip()
-        desc = re.sub(r"<[^>]+>", "", item.findtext("description", "")).strip()[:400]
-        pub_date = item.findtext("pubDate", "").strip()
-        if title:
-            items.append({"title": title, "link": link, "description": desc, "pub_date": pub_date})
-
-    # Atom
-    if not items:
-        for entry in root.findall(".//atom:entry", ns)[:max_items]:
-            title = entry.findtext("atom:title", "", ns).strip()
-            link_el = entry.find("atom:link", ns)
-            link = link_el.get("href", "") if link_el is not None else ""
-            desc = re.sub(r"<[^>]+>", "", entry.findtext("atom:summary", "", ns)).strip()[:400]
-            pub_date = entry.findtext("atom:updated", "", ns).strip()
-            if title:
-                items.append({"title": title, "link": link, "description": desc, "pub_date": pub_date})
-
-    return items
-
-
-def fetch_platform_news(platform: dict) -> dict:
-    """嘗試爬取單一平台的 RSS，回傳結果或空清單"""
-    result = {"name": platform["name"], "url": platform["url"], "articles": [], "source": "none"}
-
-    if platform.get("rss"):
-        try:
-            xml_text = fetch_url(platform["rss"])
-            articles = parse_rss(xml_text)
-            if articles:
-                result["articles"] = articles
-                result["source"] = "rss"
-                print(f"  ✅ {platform['name']}: RSS 成功，{len(articles)} 則")
-                return result
-        except Exception as e:
-            print(f"  ⚠️ {platform['name']}: RSS 失敗 ({e})")
-
-    # RSS 失敗或無 RSS → 標記為需要 GPT 補充
-    result["source"] = "gpt_needed"
-    result["search_hint"] = platform.get("fallback_search", platform["name"] + " news")
-    print(f"  ℹ️ {platform['name']}: 將由 GPT 補充近況")
-    return result
-
-
 # ─── OpenAI API 呼叫 ────────────────────────────────────
-def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o") -> str:
+def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> str:
     body = json.dumps({
         "model": model,
         "max_tokens": 4096,
@@ -164,97 +50,42 @@ def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o") -> 
     return data["choices"][0]["message"]["content"]
 
 
-# ─── 產生報告資料（JSON）───────────────────────────────────
-SYSTEM_PROMPT = """你是一位擁有超過 15 年資歷的資深財經科技新聞記者，長期深耕預測市場（Prediction Market）與去中心化金融（DeFi）產業報導。
+# ─── 產生報告內容（JSON）─────────────────────────────────
+SYSTEM_PROMPT = """你是一位在預測市場（Prediction Market）打滾超過 10 年的資深玩家。
 
 你的背景：
-- 曾任職於主流財經媒體，目前獨立撰稿，專注預測市場、事件合約、鏈上交易等議題
-- 你的文章風格：客觀、精準、有洞察力，不炒作，也不手軟
-- 你熟悉 Polymarket、Kalshi、Hyperliquid 等主要平台的商業模式與監管環境
-- 你關注產業趨勢：法規動向、資金流向、技術演進、用戶行為
+- 你從 Intrade 時代就開始玩，經歷過 PredictIt、Augur、到現在的 Polymarket 世代
+- 你每天在多個平台之間套利，對各平台的流動性、手續費、出入金速度、盤口深度瞭若指掌
+- 你同時熟悉傳統合規路線（如 Kalshi 的 CFTC 監管）和 DeFi/Web3 鏈上預測市場
+- 你說話直接、犀利、不廢話，用數據和親身經驗說話
+- 你對爛平台毫不留情，對好平台也會指出它的隱患
 
-你的任務是每天匯整預測市場產業的重要新聞，以記者視角撰寫報告。
+你的任務是每天以「老玩家」的第一人稱視角，寫一份預測市場競品日報。
 所有輸出皆使用繁體中文。你必須以純 JSON 格式回覆，不要輸出任何其他文字。"""
 
 
-def generate_report_data(platform_data: list[dict]) -> dict:
-    # 整理已爬到的內容
-    crawled_content = ""
-    gpt_needed_platforms = []
+def generate_report_data() -> dict:
+    user_prompt = f"""幫我寫今天的競品日報。規則如下：
 
-    for p in platform_data:
-        if p["source"] == "rss" and p["articles"]:
-            crawled_content += f"\n\n### {p['name']} (來源: RSS)\n"
-            for a in p["articles"]:
-                crawled_content += f"- 標題: {a['title']}\n"
-                if a.get("description"):
-                    crawled_content += f"  摘要: {a['description'][:200]}\n"
-                if a.get("pub_date"):
-                    crawled_content += f"  日期: {a['pub_date']}\n"
-        else:
-            gpt_needed_platforms.append(p["name"])
+1. **DAILY DISCOVERY**
+   從以下候選池挑一個平台介紹（不能是 Polymarket、Kalshi、VoteFlux、Hyperliquid、Predict.fun）。
+   必須是真實存在且仍在運營的平台，網址必須真實可連線，不確定就換一個。
+   候選池：Metaculus, Manifold Markets, Hedgehog Markets, PredictIt, Drift Protocol, Azuro, PlotX, Zeitgeist, Omen, Futuur, Smarkets, Betfair Exchange, Insight Prediction, Iowa Electronic Markets, Fantasy Top, Thales Market, Overtime Markets
 
-    gpt_needed_str = ""
-    if gpt_needed_platforms:
-        gpt_needed_str = f"""
-以下平台未能爬取 RSS，請根據你的知識補充這些平台截至今日的近期重要動態（最近 2-4 週內的真實事件，若不確定請不要捏造）：
-{', '.join(gpt_needed_platforms)}
-"""
+2. **競品深度分析**
+   平台：Polymarket, Kalshi, VoteFlux, Hyperliquid, Predict.fun, 加上 DAILY DISCOVERY 的平台（共 6 個）。
+   自選 4-6 個維度（如流動性、手續費、UX、監管合規等），每個維度給 1-10 分 + 一句點評。
 
-    # Daily Discovery 平台由 GPT 從候選池挑選
-    candidates_str = ", ".join(DISCOVERY_CANDIDATES)
+3. **今日觀察與碎碎念**：第一人稱，3-5 條，有個人風格。
 
-    user_prompt = f"""今天是 {TODAY_STR}。
+4. **給 VoteFlux 的建議**：3-5 條實際可執行的建議。
 
-你需要彙整一份預測市場產業每日新聞報告。
+5. **各市場熱門題目**：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，各 2 題。
 
-【已爬取的平台新聞】
-{crawled_content if crawled_content else "（本次未能爬取到 RSS 內容）"}
+只輸出 JSON，結構：
+{{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":""}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
 
-{gpt_needed_str}
-
-【DAILY DISCOVERY】
-從以下真實存在的平台候選池中挑選今天的 1 個重點平台進行介紹（不能重複選固定的 6 個平台）：
-候選平台：{candidates_str}
-
-⚠️ 選的平台必須是真實存在且目前仍在運營的，網址必須真實可連線。
-
-【任務說明】
-1. 整合上述所有平台的新聞，從中挑出今天最值得關注的 10-15 則新聞（涵蓋多個平台）
-2. 每則新聞附一句話記者短評（客觀、有洞察力、不超過 50 字）
-3. 在所有新聞結束後，撰寫一段「今日產業綜合評論」（300-500 字，記者第一人稱，分析整體趨勢）
-4. 選出今日 DAILY DISCOVERY 平台
-
-請以嚴格 JSON 格式回覆（不要加 markdown 代碼塊），結構如下：
-
-{{
-  "daily_discovery": {{
-    "name": "平台名稱",
-    "url": "真實網址",
-    "category": "平台類型（如：社群預測、合規交易所、DeFi 等）",
-    "description": "這平台做什麼（2-3句）",
-    "reporter_note": "記者視角的觀察（2-3句，分析其在產業中的定位）"
-  }},
-  "news_items": [
-    {{
-      "id": 1,
-      "platform": "平台名稱",
-      "title": "新聞標題",
-      "summary": "新聞摘要（2-3句，客觀描述事件）",
-      "reporter_comment": "記者短評（一句話，有洞察力）",
-      "source_url": "原文完整 URL（必須以 https:// 開頭；若不確定請填空字串 \"\"，絕對不要填 example.com 或假網址）",
-      "importance": "high/medium/low"
-    }}
-  ],
-  "industry_analysis": {{
-    "headline": "今日分析標題（一句話破題）",
-    "content": "今日產業綜合評論全文（300-500字，繁體中文，記者第一人稱）",
-    "key_trends": ["趨勢關鍵字1", "趨勢關鍵字2", "趨勢關鍵字3"]
-  }}
-}}
-
-news_items 必須包含 10-15 則，importance 欄位用於排版優先級。
-只輸出 JSON，不要輸出任何其他文字。"""
+competitor_analysis 必須包含 6 個平台，scores/comments 的 key 必須與 analysis_dimensions 完全一致。今天是 {TODAY_STR}。"""
 
     raw = call_openai(SYSTEM_PROMPT, user_prompt)
 
@@ -263,81 +94,82 @@ news_items 必須包含 10-15 則，importance 欄位用於排版優先級。
     raw = re.sub(r'\n?```\s*$', '', raw.strip())
 
     print(f"🔍 [DEBUG] JSON 長度: {len(raw)} 字元")
-    print(f"🔍 [DEBUG] 前 200 字:\n{raw[:200]}")
+    print(f"🔍 [DEBUG] 前 300 字:\n{raw[:300]}")
 
     return json.loads(raw)
 
 
 # ─── 組裝 HTML ───────────────────────────────────────────
-PLATFORM_COLORS = {
-    "Polymarket": "#0066ff",
-    "Kalshi": "#00b386",
-    "VoteFlux": "#f0883e",
-    "Hyperliquid": "#8957e5",
-    "Predict.fun": "#d29922",
-}
-
-IMPORTANCE_LABELS = {
-    "high": ("🔴", "重點"),
-    "medium": ("🟡", "一般"),
-    "low": ("⚪", "參考"),
-}
-
-
-def get_platform_color(name: str) -> str:
-    for key, color in PLATFORM_COLORS.items():
-        if key.lower() in name.lower():
-            return color
-    return "#58a6ff"
+def score_color(score: int) -> str:
+    """根據分數回傳顏色"""
+    if score >= 8:
+        return "#3fb950"  # 綠
+    elif score >= 5:
+        return "#d29922"  # 黃
+    else:
+        return "#f85149"  # 紅
 
 
 def build_html(data: dict) -> str:
     dd = data["daily_discovery"]
-    news_items = data["news_items"]
-    analysis = data["industry_analysis"]
+    dims = data["analysis_dimensions"]
 
-    # 依 importance 排序：high → medium → low
-    importance_order = {"high": 0, "medium": 1, "low": 2}
-    sorted_news = sorted(news_items, key=lambda x: importance_order.get(x.get("importance", "medium"), 1))
+    # ── 競品分析表頭
+    dim_headers = "".join(f"<th>{d}</th>" for d in dims)
 
-    # 統計各平台新聞數量
-    platform_counts: dict[str, int] = {}
-    for item in news_items:
-        p = item.get("platform", "其他")
-        platform_counts[p] = platform_counts.get(p, 0) + 1
+    # ── 競品分析表格行
+    comp_rows = ""
+    for c in data["competitor_analysis"]:
+        scores_cells = ""
+        for d in dims:
+            s = c["scores"].get(d, "—")
+            if isinstance(s, (int, float)):
+                color = score_color(int(s))
+                scores_cells += f'<td><span class="score" style="color:{color}">{s}</span></td>'
+            else:
+                scores_cells += f"<td>{s}</td>"
+        comp_rows += f"""<tr>
+            <td><b>{c['name']}</b></td>
+            {scores_cells}
+        </tr>"""
 
-    platform_pills = ""
-    for p, count in sorted(platform_counts.items(), key=lambda x: -x[1]):
-        color = get_platform_color(p)
-        platform_pills += f'<span class="platform-pill" style="border-color:{color};color:{color}">{p} <b>{count}</b></span>'
+    # ── 競品詳細點評卡片
+    comp_cards = ""
+    for c in data["competitor_analysis"]:
+        comments_html = ""
+        for d in dims:
+            comment = c["comments"].get(d, "")
+            s = c["scores"].get(d, "—")
+            if isinstance(s, (int, float)):
+                color = score_color(int(s))
+                comments_html += f'<div class="comment-row"><span class="dim-label">{d}</span> <span class="score" style="color:{color}">{s}/10</span> — {comment}</div>'
+            else:
+                comments_html += f'<div class="comment-row"><span class="dim-label">{d}</span> {comment}</div>'
+        comp_cards += f"""<div class="comp-card">
+            <h3>{c['name']}</h3>
+            <div class="verdict">💬 {c['overall_verdict']}</div>
+            {comments_html}
+        </div>"""
 
-    # 趨勢標籤
-    trend_tags = "".join(f'<span class="trend-tag">{t}</span>' for t in analysis.get("key_trends", []))
+    # ── 今日觀察
+    notes_html = ""
+    for i, note in enumerate(data["daily_notes"], 1):
+        notes_html += f'<div class="note-item">📝 {note}</div>\n'
 
-    # 新聞卡片
-    news_cards = ""
-    for item in sorted_news:
-        imp = item.get("importance", "medium")
-        imp_icon, imp_label = IMPORTANCE_LABELS.get(imp, ("⚪", "參考"))
-        color = get_platform_color(item.get("platform", ""))
-        source_link = ""
-        raw_url = item.get("source_url", "") or ""
-        if raw_url.startswith("http://") or raw_url.startswith("https://"):
-            source_link = f'<a href="{raw_url}" target="_blank" class="source-link">原文 →</a>'
+    # ── VoteFlux 建議
+    advice_html = ""
+    for i, a in enumerate(data["voteflux_advice"], 1):
+        advice_html += f'<div class="action-item">🎯 <b>#{i}</b> {a}</div>\n'
 
-        news_cards += f"""
-        <div class="news-card importance-{imp}">
-            <div class="news-header">
-                <span class="platform-badge" style="background:rgba({hex_to_rgb(color)},0.15);color:{color};border:1px solid {color}">{item.get('platform','')}</span>
-                <span class="importance-badge">{imp_icon} {imp_label}</span>
-                {source_link}
-            </div>
-            <div class="news-title">{item.get('title','')}</div>
-            <div class="news-summary">{item.get('summary','')}</div>
-            <div class="reporter-comment">
-                <span class="comment-icon">🖊</span>
-                <span class="comment-text">{item.get('reporter_comment','')}</span>
-            </div>
+    # ── 市場題目
+    flags = {"印度": "🇮🇳", "孟加拉": "🇧🇩", "越南": "🇻🇳", "馬來西亞": "🇲🇾", "菲律賓": "🇵🇭", "泰國": "🇹🇭"}
+    markets_html = ""
+    for m in data["market_topics"]:
+        flag = flags.get(m["market"], "🌏")
+        topics = "".join(f"<li>{t}</li>" for t in m["topics"])
+        markets_html += f"""<div class="market-card">
+            <h3>{flag} {m['market']}</h3>
+            <ul>{topics}</ul>
         </div>"""
 
     return f"""<!DOCTYPE html>
@@ -345,193 +177,172 @@ def build_html(data: dict) -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoteFlux 產業新聞日報 — {TODAY_STR}</title>
+<title>VoteFlux 每日戰報 — {TODAY_STR}</title>
 <style>
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
     body {{
         background: #0d1117; color: #c9d1d9;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
-        line-height: 1.7; padding: 20px; max-width: 960px; margin: 0 auto;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        line-height: 1.7; padding: 20px; max-width: 1200px; margin: 0 auto;
     }}
-    a {{ color: #58a6ff; text-decoration: none; }}
-    a:hover {{ text-decoration: underline; }}
-
-    /* Header */
-    .header {{
-        text-align: center; padding: 36px 0 28px;
-        border-bottom: 2px solid #21262d; margin-bottom: 32px;
-    }}
-    .header h1 {{ color: #e6edf3; font-size: 1.9em; font-weight: 700; letter-spacing: -0.5px; }}
-    .header .subtitle {{ color: #8b949e; font-size: 0.95em; margin-top: 6px; }}
-    .header .date {{ color: #f0883e; font-size: 1em; margin-top: 10px; font-weight: 600; }}
-
-    /* Section titles */
+    h1 {{ color: #58a6ff; font-size: 2em; margin-bottom: 5px; }}
     h2 {{
-        color: #e6edf3; font-size: 1.2em; font-weight: 700;
-        margin: 36px 0 16px;
-        display: flex; align-items: center; gap: 10px;
+        color: #58a6ff; font-size: 1.4em; margin: 40px 0 15px;
+        padding-bottom: 8px; border-bottom: 2px solid #21262d;
     }}
-    h2::after {{
-        content: ''; flex: 1; height: 1px; background: #21262d;
-    }}
+    h3 {{ color: #79c0ff; font-size: 1.15em; margin-bottom: 8px; }}
 
-    /* Platform pills */
-    .platform-summary {{
-        display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px;
+    .header {{
+        text-align: center; padding: 30px 0;
+        border-bottom: 3px solid #f0883e; margin-bottom: 30px;
     }}
-    .platform-pill {{
-        padding: 4px 12px; border-radius: 20px; border: 1px solid;
-        font-size: 0.85em; font-weight: 500;
-    }}
-    .platform-pill b {{ font-weight: 700; }}
+    .header .date {{ color: #8b949e; font-size: 1.1em; margin-top: 8px; }}
+    .header .subtitle {{ color: #f0883e; font-size: 0.9em; margin-top: 5px; letter-spacing: 2px; }}
 
-    /* Daily Discovery */
+    /* Discovery */
     .discovery {{
-        background: linear-gradient(135deg, #161b22, #1a2030);
+        background: linear-gradient(135deg, #161b22, #1c2333);
         border: 1px solid #f0883e; border-radius: 12px;
-        padding: 24px; margin-bottom: 8px;
+        padding: 25px; margin: 20px 0;
     }}
-    .discovery-meta {{
-        display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+    .discovery .badge {{
+        display: inline-block; background: #f0883e; color: #0d1117;
+        padding: 4px 14px; border-radius: 20px; font-weight: bold;
+        font-size: 0.85em; margin-bottom: 15px;
     }}
-    .discovery-badge {{
-        background: #f0883e; color: #0d1117;
-        padding: 3px 12px; border-radius: 20px;
-        font-size: 0.8em; font-weight: 700; letter-spacing: 1px;
+    .discovery .platform-name {{ color: #f0883e; font-size: 1.4em; font-weight: bold; }}
+    .discovery .url {{ color: #58a6ff; font-size: 0.85em; word-break: break-all; }}
+    .discovery p {{ margin-top: 12px; }}
+    .discovery .veteran-take {{
+        margin-top: 15px; padding: 15px;
+        background: rgba(240, 136, 62, 0.08); border-radius: 8px;
+        border-left: 4px solid #f0883e;
+        font-style: italic; color: #e6edf3;
     }}
-    .discovery-name {{ color: #f0883e; font-size: 1.3em; font-weight: 700; }}
-    .discovery-category {{
-        background: rgba(240,136,62,0.1); color: #f0883e;
-        padding: 2px 10px; border-radius: 4px; font-size: 0.8em;
-    }}
-    .discovery-url {{ font-size: 0.85em; margin-bottom: 12px; }}
-    .discovery p {{ color: #c9d1d9; margin-bottom: 12px; font-size: 0.95em; }}
-    .reporter-note-box {{
-        background: rgba(240,136,62,0.07); border-left: 3px solid #f0883e;
-        padding: 12px 16px; border-radius: 0 6px 6px 0;
-        font-size: 0.9em; color: #e6edf3;
-    }}
-    .reporter-note-box::before {{
-        content: "記者觀察 ── "; font-weight: 700; color: #f0883e;
-    }}
+    .discovery .veteran-take::before {{ content: "🎙️ 老玩家說："; font-style: normal; font-weight: bold; display: block; margin-bottom: 5px; color: #f0883e; }}
 
-    /* News cards */
-    .news-list {{ display: flex; flex-direction: column; gap: 12px; }}
-    .news-card {{
+    /* Score Table */
+    table {{
+        width: 100%; border-collapse: collapse;
+        background: #161b22; border-radius: 10px; overflow: hidden;
+        margin: 15px 0;
+    }}
+    th {{
+        background: #21262d; color: #58a6ff;
+        padding: 14px 15px; text-align: center;
+        font-weight: 600; font-size: 0.9em;
+    }}
+    th:first-child {{ text-align: left; }}
+    td {{ padding: 12px 15px; border-bottom: 1px solid #21262d; text-align: center; font-size: 0.9em; }}
+    td:first-child {{ text-align: left; }}
+    tr:hover td {{ background: #1c2333; }}
+    tr:last-child td {{ border-bottom: none; }}
+    .score {{ font-weight: bold; font-size: 1.1em; }}
+
+    /* Competitor Cards */
+    .comp-cards {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px; margin: 15px 0; }}
+    .comp-card {{
         background: #161b22; border: 1px solid #21262d;
-        border-radius: 10px; padding: 18px 20px;
-        transition: border-color 0.2s;
+        border-radius: 10px; padding: 20px;
     }}
-    .news-card:hover {{ border-color: #30363d; }}
-    .news-card.importance-high {{ border-left: 3px solid #f85149; }}
-    .news-card.importance-medium {{ border-left: 3px solid #d29922; }}
-    .news-card.importance-low {{ border-left: 3px solid #30363d; }}
-
-    .news-header {{
-        display: flex; align-items: center; gap: 8px;
-        margin-bottom: 10px; flex-wrap: wrap;
+    .comp-card .verdict {{
+        margin: 10px 0 15px; padding: 10px;
+        background: rgba(88, 166, 255, 0.06); border-radius: 6px;
+        font-style: italic; color: #8b949e; font-size: 0.95em;
     }}
-    .platform-badge {{
-        padding: 2px 10px; border-radius: 4px;
-        font-size: 0.78em; font-weight: 600;
-    }}
-    .importance-badge {{
-        font-size: 0.78em; color: #8b949e;
-    }}
-    .source-link {{
-        margin-left: auto; font-size: 0.8em; color: #58a6ff;
-    }}
-    .news-title {{
-        font-size: 1.0em; font-weight: 600; color: #e6edf3;
-        margin-bottom: 8px; line-height: 1.5;
-    }}
-    .news-summary {{
-        font-size: 0.88em; color: #8b949e; margin-bottom: 10px;
-        line-height: 1.6;
-    }}
-    .reporter-comment {{
-        display: flex; gap: 8px; align-items: flex-start;
-        background: rgba(88,166,255,0.05); border-radius: 6px;
-        padding: 8px 12px;
-    }}
-    .comment-icon {{ flex-shrink: 0; margin-top: 1px; }}
-    .comment-text {{
-        font-size: 0.88em; color: #79c0ff; font-style: italic;
-        line-height: 1.5;
+    .comment-row {{ margin: 6px 0; font-size: 0.9em; }}
+    .dim-label {{
+        display: inline-block; background: #21262d;
+        padding: 2px 8px; border-radius: 4px; font-size: 0.8em;
+        margin-right: 6px; color: #8b949e;
     }}
 
-    /* Industry Analysis */
-    .analysis-box {{
-        background: linear-gradient(135deg, #161b22, #1a2030);
-        border: 1px solid #21262d; border-radius: 12px; padding: 28px;
-        margin-top: 8px;
+    /* Notes */
+    .note-item {{
+        background: #161b22; border-left: 4px solid #8957e5;
+        padding: 15px 20px; margin: 10px 0; border-radius: 0 8px 8px 0;
+        font-size: 0.95em;
     }}
-    .analysis-headline {{
-        font-size: 1.15em; font-weight: 700; color: #58a6ff;
-        margin-bottom: 16px; line-height: 1.4;
+
+    /* Action Items */
+    .action-item {{
+        background: #161b22; border-left: 4px solid #3fb950;
+        padding: 15px 20px; margin: 10px 0; border-radius: 0 8px 8px 0;
     }}
-    .analysis-content {{
-        font-size: 0.95em; color: #c9d1d9; line-height: 1.9;
-        white-space: pre-line;
+
+    /* Market Cards */
+    .markets-grid {{
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 15px; margin: 15px 0;
     }}
-    .trend-tags {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }}
-    .trend-tag {{
-        background: rgba(88,166,255,0.1); color: #58a6ff;
-        padding: 4px 12px; border-radius: 20px; font-size: 0.82em;
-        border: 1px solid rgba(88,166,255,0.3);
+    .market-card {{
+        background: #161b22; border: 1px solid #21262d;
+        border-radius: 10px; padding: 20px;
     }}
+    .market-card ul {{ margin-top: 10px; padding-left: 20px; }}
+    .market-card li {{ margin: 8px 0; color: #c9d1d9; }}
 
     /* Footer */
     .footer {{
         text-align: center; margin-top: 50px; padding-top: 20px;
-        border-top: 1px solid #21262d; color: #484f58; font-size: 0.82em;
+        border-top: 1px solid #21262d; color: #484f58; font-size: 0.85em;
     }}
 
-    @media (max-width: 640px) {{
+    @media (max-width: 768px) {{
         body {{ padding: 12px; }}
-        .header h1 {{ font-size: 1.5em; }}
-        .source-link {{ margin-left: 0; }}
+        .comp-cards, .markets-grid {{ grid-template-columns: 1fr; }}
+        table {{ font-size: 0.8em; }}
+        th, td {{ padding: 8px 10px; }}
     }}
 </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>📰 VoteFlux 產業新聞日報</h1>
-    <div class="subtitle">PREDICTION MARKET DAILY BRIEFING</div>
+    <h1>🤖 VoteFlux 每日戰報</h1>
     <div class="date">{TODAY_STR}</div>
+    <div class="subtitle">PREDICTION MARKET DAILY INTELLIGENCE</div>
 </div>
 
-<!-- 平台分佈 -->
-<div class="platform-summary">
-    {platform_pills}
-</div>
-
-<!-- Daily Discovery -->
-<h2>🔍 今日平台聚焦</h2>
+<!-- DAILY DISCOVERY -->
+<h2>🔍 DAILY DISCOVERY</h2>
 <div class="discovery">
-    <div class="discovery-meta">
-        <span class="discovery-badge">DAILY DISCOVERY</span>
-        <span class="discovery-name">{dd['name']}</span>
-        <span class="discovery-category">{dd.get('category','')}</span>
-    </div>
-    <div class="discovery-url"><a href="{dd.get('url','')}" target="_blank">{dd.get('url','')}</a></div>
+    <span class="badge">TODAY'S FIND</span>
+    <div class="platform-name">{dd['name']}</div>
+    <div class="url">{dd.get('url', '')}</div>
     <p>{dd['description']}</p>
-    <div class="reporter-note-box">{dd['reporter_note']}</div>
+    <div class="veteran-take">{dd['veteran_take']}</div>
 </div>
 
-<!-- 新聞列表 -->
-<h2>📋 今日重要新聞（{len(sorted_news)} 則）</h2>
-<div class="news-list">
-    {news_cards}
+<!-- 評分總覽 -->
+<h2>📊 競品評分總覽</h2>
+<table>
+    <thead>
+        <tr><th>平台</th>{dim_headers}</tr>
+    </thead>
+    <tbody>
+        {comp_rows}
+    </tbody>
+</table>
+
+<!-- 詳細點評 -->
+<h2>🔬 各平台詳細點評</h2>
+<div class="comp-cards">
+    {comp_cards}
 </div>
 
-<!-- 綜合評論 -->
-<h2>📝 今日產業綜合評論</h2>
-<div class="analysis-box">
-    <div class="analysis-headline">"{analysis['headline']}"</div>
-    <div class="analysis-content">{analysis['content']}</div>
-    <div class="trend-tags">{trend_tags}</div>
+<!-- 今日觀察 -->
+<h2>📝 今日觀察與碎碎念</h2>
+{notes_html}
+
+<!-- VoteFlux 建議 -->
+<h2>⚔️ 給 VoteFlux 的建議</h2>
+{advice_html}
+
+<!-- 市場題目 -->
+<h2>🌏 各市場熱門題目推薦</h2>
+<div class="markets-grid">
+    {markets_html}
 </div>
 
 <div class="footer">
@@ -540,15 +351,6 @@ def build_html(data: dict) -> str:
 
 </body>
 </html>"""
-
-
-def hex_to_rgb(hex_color: str) -> str:
-    """#rrggbb → 'r,g,b'"""
-    hex_color = hex_color.lstrip("#")
-    if len(hex_color) == 6:
-        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
-        return f"{r},{g},{b}"
-    return "88,166,255"
 
 
 # ─── 檔案儲存 ────────────────────────────────────────────
@@ -564,7 +366,7 @@ def save_html_report(html_content: str) -> str:
 <html><head>
 <meta charset="UTF-8">
 <meta http-equiv="refresh" content="0; url=voteflux-{TODAY_FILE}.html">
-<title>VoteFlux 最新日報</title>
+<title>VoteFlux 最新戰報</title>
 </head><body>
 <p>正在跳轉到最新報告... <a href="voteflux-{TODAY_FILE}.html">點此前往</a></p>
 </body></html>""")
@@ -573,88 +375,63 @@ def save_html_report(html_content: str) -> str:
     return filename
 
 
-# ─── Telegram 多人推播 ───────────────────────────────────
+# ─── Telegram 發送 ───────────────────────────────────────
 def send_telegram(text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    body = json.dumps({
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": False,
+    }).encode("utf-8")
 
-    for chat_id in TELEGRAM_CHAT_IDS:
-        body = json.dumps({
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": False,
-        }).encode("utf-8")
+    req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
 
-        req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-
-        try:
-            with urlopen(req, timeout=15) as resp:
-                result = json.loads(resp.read().decode())
-                if not result.get("ok"):
-                    print(f"⚠️ Telegram 發送失敗 (chat_id: {chat_id}): {result}")
-                else:
-                    print(f"✅ 訊息已發送到 {chat_id}")
-        except Exception as e:
-            # fallback 純文字
-            print(f"⚠️ HTML 格式失敗，嘗試純文字 (chat_id: {chat_id}): {e}")
-            try:
-                plain = re.sub(r"<[^>]+>", "", text)
-                body2 = json.dumps({"chat_id": chat_id, "text": plain}).encode("utf-8")
-                req2 = Request(url, data=body2, headers={"Content-Type": "application/json"}, method="POST")
-                with urlopen(req2, timeout=15) as resp2:
-                    print(f"✅ 純文字已發送到 {chat_id}")
-            except Exception as e2:
-                print(f"❌ 完全失敗 (chat_id: {chat_id}): {e2}")
+    try:
+        with urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode())
+            if not result.get("ok"):
+                raise RuntimeError(f"Telegram API 錯誤: {result}")
+        print("✅ Telegram 訊息已發送！")
+    except Exception as e:
+        print(f"⚠️ Telegram HTML 發送失敗: {e}")
+        plain = re.sub(r'<[^>]+>', '', text)
+        body2 = json.dumps({"chat_id": TELEGRAM_CHAT_ID, "text": plain}).encode("utf-8")
+        req2 = Request(url, data=body2, headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(req2, timeout=15) as resp2:
+            pass
+        print("✅ Telegram 訊息已發送（純文字 fallback）！")
 
 
 # ─── 主程式 ──────────────────────────────────────────────
 def main():
-    print("=" * 55)
-    print(f"📰 VoteFlux 產業新聞日報 — {TODAY_STR}")
-    print("=" * 55)
+    print("=" * 50)
+    print(f"🤖 VoteFlux 每日戰報 — {TODAY_STR}")
+    print("=" * 50)
 
-    # Step 1: 爬取各平台 RSS
-    print("\n📡 正在爬取各平台新聞來源...")
-    platform_data = []
-    for platform in FIXED_PLATFORMS:
-        result = fetch_platform_news(platform)
-        platform_data.append(result)
-
-    rss_success = sum(1 for p in platform_data if p["source"] == "rss")
-    print(f"📊 RSS 爬取成功: {rss_success}/{len(FIXED_PLATFORMS)} 個平台")
-
-    # Step 2: GPT-4o 彙整新聞 + 產生報告資料
-    print("\n🤖 正在用 GPT-4o 彙整新聞並產生報告資料...")
+    # Step 1: GPT-4o 產生報告資料（JSON）
+    print("\n📝 正在產生報告資料（GPT-4o → JSON）...")
     try:
-        report_data = generate_report_data(platform_data)
-        news_count = len(report_data.get("news_items", []))
-        print(f"✅ JSON 解析成功，共 {news_count} 則新聞")
+        report_data = generate_report_data()
+        print("✅ JSON 解析成功")
     except (json.JSONDecodeError, KeyError, IndexError) as e:
         print(f"❌ JSON 解析失敗: {e}")
-        send_telegram(f"⚠️ <b>VoteFlux 產業新聞日報 — {TODAY_STR}</b>\n\n報告產生失敗，請手動檢查 Action log。")
+        send_telegram(f"⚠️ <b>VoteFlux 每日戰報 — {TODAY_STR}</b>\n\n報告產生失敗，請手動檢查 Action log。")
         return
 
-    # Step 3: 組裝 HTML
+    # Step 2: 組裝 HTML
     print("\n🔨 正在組裝 HTML 報告...")
     html_content = build_html(report_data)
     save_html_report(html_content)
 
-    # Step 4: 推播到 Telegram
-    news_count = len(report_data.get("news_items", []))
-    discovery_name = report_data.get("daily_discovery", {}).get("name", "")
+    # Step 3: 推播連結到 Telegram
     report_url = f"{GITHUB_PAGES_URL}/voteflux-{TODAY_FILE}.html"
-
-    message = (
-        f"📰 <b>VoteFlux 產業新聞日報 — {TODAY_STR}</b>\n\n"
-        f"今日彙整 <b>{news_count} 則</b>重要新聞\n"
-        f"🔍 今日聚焦：<b>{discovery_name}</b>\n\n"
-        f"🔗 <a href=\"{report_url}\">📖 查看完整報告</a>"
-    )
+    message = f"🤖 <b>VoteFlux 每日戰報 — {TODAY_STR}</b>\n\n🔗 <a href=\"{report_url}\">📖 查看完整報告</a>"
 
     print("\n📤 正在推播到 Telegram...")
     send_telegram(message)
 
-    print("\n🎉 VoteFlux 產業新聞日報完成！")
+    print("\n🎉 VoteFlux 每日戰報完成！")
 
 
 if __name__ == "__main__":
