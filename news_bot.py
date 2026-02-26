@@ -10,6 +10,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from urllib.request import urlopen, Request
 from urllib.parse import quote
 
@@ -35,13 +36,33 @@ RSS_FEEDS = {
         "https://feeds.feedburner.com/ithome",
         "https://technews.tw/feed/",
     ],
+    "🤖 AI 新聞": [
+        "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",  # The Verge AI
+        "https://venturebeat.com/ai/feed/",                                    # VentureBeat AI
+        "https://techcrunch.com/tag/artificial-intelligence/feed/",            # TechCrunch AI
+    ],
     "💰 財經新聞": [
         "https://news.ltn.com.tw/rss/business.xml",
         "https://www.cna.com.tw/rss/aafe.xml",
     ],
 }
 
-MAX_ITEMS_PER_FEED = 5  # 每個 RSS 來源取幾則
+MAX_ITEMS_PER_FEED = 20  # 多抓一些，過濾日期後再限制數量
+MAX_ITEMS_PER_FEED_FINAL = 5  # 過濾後每個來源最多保留幾則
+
+
+def is_today(pub_date_str: str) -> bool:
+    """判斷發布日期是否為今天（台灣時間）。無法解析時回傳 True（保留該則新聞）。"""
+    if not pub_date_str:
+        return True
+    try:
+        # RSS 2.0 的 pubDate 格式：RFC 2822，例如 "Mon, 24 Feb 2026 01:00:00 +0800"
+        pub_dt = parsedate_to_datetime(pub_date_str)
+        pub_tw = pub_dt.astimezone(TW_TZ)
+        today_tw = datetime.now(TW_TZ).date()
+        return pub_tw.date() == today_tw
+    except Exception:
+        return True  # 解析失敗時保留，不誤殺
 
 
 # ─── 工具函式 ────────────────────────────────────────────
@@ -53,7 +74,7 @@ def fetch_url(url: str, timeout: int = 15) -> str:
 
 
 def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
-    """解析 RSS/Atom feed，回傳 [{title, link, description}]"""
+    """解析 RSS/Atom feed，只保留今天的新聞，回傳 [{title, link, description}]"""
     items = []
     try:
         root = ET.fromstring(xml_text)
@@ -65,10 +86,13 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
 
     # RSS 2.0
     for item in root.findall(".//item")[:max_items]:
+        pub_date = item.findtext("pubDate", "").strip()
+        if not is_today(pub_date):
+            continue  # ← 跳過非今天的新聞
+
         title = item.findtext("title", "").strip()
         link = item.findtext("link", "").strip()
         desc = item.findtext("description", "").strip()
-        # 移除 HTML 標籤
         desc = re.sub(r"<[^>]+>", "", desc)[:300]
         if title:
             items.append({"title": title, "link": link, "description": desc})
@@ -76,6 +100,23 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
     # Atom feed
     if not items:
         for entry in root.findall(".//atom:entry", ns)[:max_items]:
+            # Atom 的日期欄位是 <updated> 或 <published>
+            pub_date = (
+                entry.findtext("atom:published", "", ns)
+                or entry.findtext("atom:updated", "", ns)
+            ).strip()
+
+            # Atom 日期格式是 ISO 8601，需要另外解析
+            if pub_date:
+                try:
+                    pub_dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+                    pub_tw = pub_dt.astimezone(TW_TZ)
+                    today_tw = datetime.now(TW_TZ).date()
+                    if pub_tw.date() != today_tw:
+                        continue  # ← 跳過非今天的新聞
+                except Exception:
+                    pass  # 解析失敗就保留
+
             title = entry.findtext("atom:title", "", ns).strip()
             link_el = entry.find("atom:link", ns)
             link = link_el.get("href", "") if link_el is not None else ""
@@ -84,7 +125,7 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
             if title:
                 items.append({"title": title, "link": link, "description": desc})
 
-    return items
+    return items[:MAX_ITEMS_PER_FEED_FINAL]
 
 
 def fetch_all_news() -> dict[str, list[dict]]:
@@ -95,7 +136,9 @@ def fetch_all_news() -> dict[str, list[dict]]:
         for feed_url in feeds:
             try:
                 xml_text = fetch_url(feed_url)
-                category_items.extend(parse_rss(xml_text))
+                fetched = parse_rss(xml_text)
+                print(f"  📌 {feed_url} → 今天共 {len(fetched)} 則")
+                category_items.extend(fetched)
             except Exception as e:
                 print(f"⚠️ 無法抓取 {feed_url}: {e}")
         all_news[category] = category_items
@@ -103,7 +146,7 @@ def fetch_all_news() -> dict[str, list[dict]]:
 
 
 def build_prompt(all_news: dict[str, list[dict]]) -> str:
-    """組合 prompt 給 Claude 做摘要"""
+    """組合 prompt 給 GPT 做摘要"""
     news_text = ""
     for category, items in all_news.items():
         news_text += f"\n\n## {category}\n"
@@ -139,9 +182,6 @@ def build_prompt(all_news: dict[str, list[dict]]) -> str:
 
 def call_ai(prompt: str) -> str:
     """呼叫 OpenAI API 取得摘要"""
-    import json
-    from urllib.request import urlopen, Request
-
     body = json.dumps({
         "model": "gpt-4o-mini",
         "max_tokens": 2048,
@@ -198,7 +238,7 @@ def main():
     all_news = fetch_all_news()
 
     total = sum(len(v) for v in all_news.values())
-    print(f"📰 共抓取 {total} 則新聞")
+    print(f"📰 今天共抓取 {total} 則新聞")
 
     if total == 0:
         send_telegram("⚠️ 今天無法抓取新聞，請檢查 RSS 來源。")
