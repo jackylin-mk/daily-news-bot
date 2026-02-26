@@ -23,6 +23,9 @@ OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 # 台灣時間
 TW_TZ = timezone(timedelta(hours=8))
 
+# 手動觸發模式（workflow_dispatch）→ 不做去重複，方便測試
+IS_MANUAL = os.environ.get("IS_MANUAL", "false").lower() == "true"
+
 # ─── RSS 新聞來源 ────────────────────────────────────────
 RSS_FEEDS = {
     "🇹🇼 台灣綜合": [
@@ -117,8 +120,8 @@ def fetch_url(url: str, timeout: int = 15) -> str:
         return resp.read().decode("utf-8", errors="replace")
 
 
-def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
-    """解析 RSS/Atom feed，只保留今天的新聞，回傳 [{title, link, description}]"""
+def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED, skip_date_filter: bool = False) -> list[dict]:
+    """解析 RSS/Atom feed，回傳 [{title, link, description}]。skip_date_filter=True 時不過濾日期（用於英文來源）"""
     items = []
     try:
         root = ET.fromstring(xml_text)
@@ -131,7 +134,7 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
     # RSS 2.0
     for item in root.findall(".//item")[:max_items]:
         pub_date = item.findtext("pubDate", "").strip()
-        if not is_today(pub_date):
+        if not skip_date_filter and not is_today(pub_date):
             continue  # ← 跳過非今天的新聞
 
         title = item.findtext("title", "").strip()
@@ -153,7 +156,7 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
             ).strip()
 
             # Atom 日期格式是 ISO 8601，需要另外解析
-            if pub_date:
+            if pub_date and not skip_date_filter:
                 try:
                     pub_dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
                     pub_tw = pub_dt.astimezone(TW_TZ)
@@ -176,6 +179,14 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED) -> list[dict]:
     return items[:MAX_ITEMS_PER_FEED_FINAL]
 
 
+# 英文來源不做日期過濾（因為美國時間比台灣晚，早上跑時文章日期還是昨天）
+EN_FEEDS = {
+    "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",
+    "https://venturebeat.com/ai/feed/",
+    "https://techcrunch.com/tag/artificial-intelligence/feed/",
+}
+
+
 def fetch_all_news(seen: set) -> dict[str, list[dict]]:
     """抓取所有分類的新聞，並過濾已推播過的標題"""
     all_news = {}
@@ -184,9 +195,11 @@ def fetch_all_news(seen: set) -> dict[str, list[dict]]:
         for feed_url in feeds:
             try:
                 xml_text = fetch_url(feed_url)
-                fetched = parse_rss(xml_text)
-                fetched = filter_seen(fetched, seen)  # ← 去重複
-                print(f"  📌 {feed_url} → 今天共 {len(fetched)} 則（未推播過）")
+                skip_date = feed_url in EN_FEEDS  # 英文來源不做日期過濾
+                fetched = parse_rss(xml_text, skip_date_filter=skip_date)
+                if not IS_MANUAL:
+                    fetched = filter_seen(fetched, seen)  # ← 自動排程才去重複
+                print(f"  📌 {feed_url} → {len(fetched)} 則")
                 category_items.extend(fetched)
             except Exception as e:
                 print(f"⚠️ 無法抓取 {feed_url}: {e}")
@@ -306,11 +319,14 @@ def main():
     print("📤 正在發送到 Telegram...")
     send_telegram(summary)
 
-    # 推播成功後才記錄，避免失敗時誤標為已推播
-    for items in all_news.values():
-        mark_seen(items, seen)
-    save_seen(seen)
-    print(f"💾 已記錄本次推播標題，總計 {len(seen)} 筆")
+    # 推播成功後才記錄（手動測試模式不記錄，避免影響明天的自動推播）
+    if not IS_MANUAL:
+        for items in all_news.values():
+            mark_seen(items, seen)
+        save_seen(seen)
+        print(f"💾 已記錄本次推播標題，總計 {len(seen)} 筆")
+    else:
+        print("ℹ️ 手動測試模式，不記錄推播標題")
     print("🎉 完成！")
 
 
