@@ -23,7 +23,7 @@
 | Telegram Bot | ✅ 免費 |
 | GitHub | ✅ 免費 |
 | Cloudflare Workers | ✅ 免費 |
-| Google Gemini API | ✅ 免費（每天 1,500 次，每天只用 1 次） |
+| Google Gemini API | ✅ 免費（每天 1,500 次，Bot 每天只用 1 次） |
 | **合計** | **完全免費** |
 
 ---
@@ -80,23 +80,74 @@
 
    **📌 把這串 Key 複製起來備用**
 
-> ✅ 免費方案每天有 1,500 次請求額度，這個 Bot 每天只用 1 次，完全夠用。
-> 不需要綁信用卡。
+> ✅ 免費方案每天有 1,500 次請求額度，Bot 每天只用 1 次，完全夠用。不需要綁信用卡。
 
 ---
 
-## Step 4 ─ Fork 專案到你的 GitHub
+## Step 4 ─ 建立你的 GitHub Repo
 
-1. 前往本專案的 GitHub 頁面
-2. 點右上角 **Fork** → **Create Fork**
-3. 現在你的 GitHub 帳號下有一份自己的副本了
+> 只需要兩個檔案，不需要 Fork 整個專案。
+
+1. 登入 GitHub，點右上角 **+** → **New repository**
+2. Repository name 填 `daily-news-bot`
+3. 選 **Public**
+4. 點 **Create repository**
+
+**上傳檔案一：`news_bot.py`**
+
+把本專案的 `news_bot_gemini.py` 下載後，重新命名為 `news_bot.py`，上傳到你的 repo。
+
+**上傳檔案二：`.github/workflows/daily-news.yml`**
+
+在你的 repo 點 **Add file** → **Create new file**，檔名填 `.github/workflows/daily-news.yml`，內容貼上：
+
+```yaml
+name: 每日新聞推播
+
+on:
+  workflow_dispatch:
+
+jobs:
+  send-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore seen titles cache
+        uses: actions/cache@v4
+        with:
+          path: seen_titles.json
+          key: seen-titles-${{ runner.os }}
+          restore-keys: seen-titles-
+
+      - name: Run News Bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IS_MANUAL: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+        run: python news_bot.py
+
+      - name: Save seen titles cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: seen_titles.json
+          key: seen-titles-${{ runner.os }}-${{ github.run_id }}
+```
 
 ---
 
 ## Step 5 ─ 填入你的 API Keys
 
-1. 進入你 Fork 後的 repo
-2. 點上方 **Settings** → 左側 **Secrets and variables** → **Actions**
+1. 進入你的 repo → 點上方 **Settings**
+2. 左側 **Secrets and variables** → **Actions**
 3. 點 **New repository secret**，依序新增以下 3 個：
 
 | Secret 名稱 | 填入的值 |
@@ -111,12 +162,44 @@
 
 ## Step 6 ─ 部署 Cloudflare Workers（讓它每天準時自動跑）
 
-> 這個步驟讓 Bot 每天早上 08:00 自動執行，不需要你手動觸發。
-
 1. 登入 [dash.cloudflare.com](https://dash.cloudflare.com/)
 2. 左側選 **Workers & Pages** → **Create** → **Hello World** → Deploy
 3. Worker 名稱設為 `daily-bot-trigger`
-4. 進入 **Edit code**，把程式碼全部替換成專案裡 `cloudflare-worker/worker.js` 的內容 → **Deploy**
+4. 進入 **Edit code**，把程式碼全部替換成以下內容 → **Deploy**：
+
+```javascript
+export default {
+  async scheduled(event, env) {
+    const owner = env.GITHUB_OWNER;
+    const repo = env.GITHUB_REPO;
+    const token = env.GITHUB_TOKEN;
+
+    const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/daily-news.yml/dispatches`;
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "CloudflareWorker-DailyBot",
+      },
+      body: JSON.stringify({ ref: "main" }),
+    });
+
+    if (resp.ok || resp.status === 204) {
+      console.log("✅ daily-news.yml 觸發成功");
+    } else {
+      const body = await resp.text();
+      console.error(`❌ 觸發失敗: ${resp.status} ${body}`);
+    }
+  },
+
+  async fetch(request, env) {
+    return new Response("Daily Bot Trigger is running.");
+  },
+};
+```
+
 5. 到 **Settings → Trigger Events → Cron Triggers** → 新增：`0 0 * * *`
 6. 到 **Settings → Variables and Secrets** → 新增以下 3 個：
 
@@ -128,16 +211,14 @@
 
 ---
 
-## Step 7 ─ 產生 GitHub Token（讓 Cloudflare 能觸發 GitHub）
+## Step 7 ─ 產生 GitHub Token
 
 1. 前往 [github.com/settings/tokens?type=beta](https://github.com/settings/tokens?type=beta)
 2. **Generate new token** → **Fine-grained token**
 3. Token name 隨意填，例如 `cloudflare-trigger`
 4. **Repository access** → **Only select repositories** → 選 `daily-news-bot`
 5. **Permissions** → **Actions** → 選 **Read and write**
-6. **Generate token** → 複製 Token
-
-   **📌 把 Token 填入 Step 6 的 `GITHUB_TOKEN`**
+6. **Generate token** → 複製 Token → 填入 Step 6 的 `GITHUB_TOKEN`
 
 ---
 
@@ -156,13 +237,23 @@
 到 GitHub Actions 頁面，點那次執行記錄，看 log 裡有沒有紅色錯誤訊息。最常見的原因是 Secret 填錯或 Chat ID 有誤。
 
 **Q：可以修改推播時間嗎？**
-到 Cloudflare Workers → Cron Triggers 修改，台灣時間 07:00 = `0 23 * * *`，09:00 = `0 1 * * *`。
+到 Cloudflare Workers → Cron Triggers 修改：
+
+| 台灣時間 | Cron |
+|---------|------|
+| 07:00 | `0 23 * * *` |
+| **08:00** | **`0 0 * * *`** ← 目前設定 |
+| 09:00 | `0 1 * * *` |
+| 12:00 | `0 4 * * *` |
 
 **Q：可以加自己想看的新聞來源嗎？**
-編輯 repo 裡的 `news_bot.py`，在 `RSS_FEEDS` 加入你想要的 RSS 網址即可。
+編輯 `news_bot.py` 中的 `RSS_FEEDS`，加入你想要的 RSS 網址即可。
 
 **Q：Gemini 免費額度夠用嗎？**
-完全夠。免費方案每天 1,500 次請求，這個 Bot 每天只呼叫 1 次。
+完全夠。免費方案每天 1,500 次請求，這個 Bot 每天只用 1 次。
 
 ---
 
+<p align="center">
+  設定完成後就可以忘掉它了，每天早上自動送達 ☕
+</p>
