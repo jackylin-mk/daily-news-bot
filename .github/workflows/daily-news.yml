@@ -15,9 +15,23 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Restore seen titles cache
+        uses: actions/cache@v4
+        with:
+          path: seen_titles.json
+          key: seen-titles-${{ runner.os }}
+          restore-keys: seen-titles-
+
       - name: Run News Bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python news_bot.py
+
+      - name: Save seen titles cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: seen_titles.json
+          key: seen-titles-${{ runner.os }}-${{ github.run_id }}
