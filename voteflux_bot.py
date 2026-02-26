@@ -1,6 +1,6 @@
 """
 VoteFlux 每日市場研究報告
-- 使用 OpenAI API (GPT-4o) 以資深預測投注玩家視角分析競品
+- 使用 OpenAI API (GPT-4o-mini) 以資深預測投注玩家視角分析競品
 - 產生完整 HTML 報告部署到 GitHub Pages
 - 推播報告連結到 Telegram
 """
