@@ -1,8 +1,16 @@
 """
 每日新聞摘要 Telegram Bot
-- 抓取台灣綜合、國際、科技、財經新聞 (RSS)
-- 使用 OpenAI API (GPT-4o-mini) 產生中文摘要
-- 推播到 Telegram
+
+新聞分類：台灣綜合 · 國際 · 科技 · AI · 娛樂休閒 · 財經
+AI 摘要：OpenAI GPT-4o-mini
+推播方式：Telegram（支援多人）
+排程觸發：Cloudflare Workers Cron → GitHub Actions（每天台灣時間 08:00）
+
+過濾機制：
+  - 日期過濾：只保留當天新聞（英文來源不受時區影響）
+  - 去重複：跨天記錄已推播標題，避免重複出現
+  - 黑名單：TITLE_BLACKLIST 關鍵字直接過濾
+  - 手動測試模式：workflow_dispatch 觸發時不寫入記錄，方便反覆測試
 """
 
 import os
@@ -41,13 +49,26 @@ RSS_FEEDS = {
         "https://technews.tw/feed/",
     ],
     "🤖 AI 新聞": [
+        # 英文科技媒體
         "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",  # The Verge AI
         "https://venturebeat.com/ai/feed/",                                    # VentureBeat AI
         "https://techcrunch.com/tag/artificial-intelligence/feed/",            # TechCrunch AI
+        # 美國大廠官方 Blog
+        "https://openai.com/news/rss.xml",                                     # OpenAI 官方
+        "https://blog.google/technology/ai/rss/",                              # Google AI Blog
+        "https://deepmind.google/blog/rss.xml",                                # Google DeepMind
+        "https://buttondown.com/anthropic/rss",                                # Anthropic Newsletter
+        # 新加坡與亞太
+        "https://www.channelnewsasia.com/rssfeeds/8395744",                    # CNA Science & Tech
+        "https://www.techinasia.com/feed",                                     # Tech in Asia
     ],
     "💰 財經新聞": [
         "https://news.ltn.com.tw/rss/business.xml",
         "https://www.cna.com.tw/rss/aafe.xml",
+    ],
+    "🎭 娛樂休閒": [
+        "https://news.ltn.com.tw/rss/entertainment.xml",
+        "https://feeds.feedburner.com/ettoday/entertainment",
     ],
 }
 
@@ -197,8 +218,7 @@ def fetch_all_news(seen: set) -> dict[str, list[dict]]:
                 xml_text = fetch_url(feed_url)
                 skip_date = feed_url in EN_FEEDS  # 英文來源不做日期過濾
                 fetched = parse_rss(xml_text, skip_date_filter=skip_date)
-                if not IS_MANUAL:
-                    fetched = filter_seen(fetched, seen)  # ← 自動排程才去重複
+                fetched = filter_seen(fetched, seen)  # ← 永遠過濾已推播標題（手動模式不寫入，但仍然讀取）
                 print(f"  📌 {feed_url} → {len(fetched)} 則")
                 category_items.extend(fetched)
             except Exception as e:
