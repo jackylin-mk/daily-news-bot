@@ -42,7 +42,7 @@ RSS_FEEDS = {
     ],
     "🌍 國際新聞": [
         "https://news.ltn.com.tw/rss/world.xml",
-        "https://www.cna.com.tw/rss/aall.aspx",
+        "https://udn.com/rssfeed/news/2/WORLD?ch=news",
     ],
     "💻 科技新聞": [
         "https://feeds.feedburner.com/ithome",
@@ -57,17 +57,17 @@ RSS_FEEDS = {
         "https://openai.com/news/rss.xml",                                     # OpenAI 官方
         "https://blog.google/technology/ai/rss/",                              # Google AI Blog
         "https://deepmind.google/blog/rss.xml",                                # Google DeepMind
-        "https://www.anthropic.com/blog/rss",                                  # Anthropic Blog
+        "https://huggingface.co/blog/feed.xml",                                # HuggingFace Blog
         # 新加坡與亞太
         "https://www.channelnewsasia.com/rssfeeds/8395744",                    # CNA Science & Tech
     ],
     "💰 財經新聞": [
         "https://news.ltn.com.tw/rss/business.xml",
-        "https://www.cna.com.tw/rss/aafe.aspx",
+        "https://udn.com/rssfeed/news/2/FINANCE?ch=news",
     ],
     "🎭 娛樂休閒": [
         "https://news.ltn.com.tw/rss/entertainment.xml",
-        "https://www.ettoday.net/news/rss2.xml",
+        "https://star.ettoday.net/rss.xml",
     ],
 }
 
