@@ -42,20 +42,32 @@ RSS_FEEDS = {
     ],
     "🌍 國際新聞": [
         "https://news.ltn.com.tw/rss/world.xml",
-        "https://www.cna.com.tw/rss/aall.xml",
+        "https://udn.com/rssfeed/news/2/WORLD?ch=news",
     ],
     "💻 科技新聞": [
         "https://feeds.feedburner.com/ithome",
         "https://technews.tw/feed/",
     ],
     "🤖 AI 新聞": [
-        "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",  # The Verge AI
-        "https://venturebeat.com/ai/feed/",                                    # VentureBeat AI
+        # 英文科技媒體
+        "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",  # The Verge AI
+        "https://venturebeat.com/category/ai/feed/",                           # VentureBeat AI
         "https://techcrunch.com/tag/artificial-intelligence/feed/",            # TechCrunch AI
+        # 美國大廠官方 Blog
+        "https://openai.com/news/rss.xml",                                     # OpenAI 官方
+        "https://blog.google/technology/ai/rss/",                              # Google AI Blog
+        "https://deepmind.google/blog/rss.xml",                                # Google DeepMind
+        "https://huggingface.co/blog/feed.xml",                                # HuggingFace Blog
+        # 新加坡與亞太
+        "https://www.channelnewsasia.com/rssfeeds/8395744",                    # CNA Science & Tech
     ],
     "💰 財經新聞": [
         "https://news.ltn.com.tw/rss/business.xml",
-        "https://www.cna.com.tw/rss/aafe.xml",
+        "https://udn.com/rssfeed/news/2/FINANCE?ch=news",
+    ],
+    "🎭 娛樂休閒": [
+        "https://news.ltn.com.tw/rss/entertainment.xml",
+        "https://star.ettoday.net/rss.xml",
     ],
 }
 
@@ -189,9 +201,17 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED, skip_date_filt
 
 # 英文來源不做日期過濾（因為美國時間比台灣晚，早上跑時文章日期還是昨天）
 EN_FEEDS = {
-    "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",
-    "https://venturebeat.com/ai/feed/",
+    "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    "https://venturebeat.com/category/ai/feed/",
     "https://techcrunch.com/tag/artificial-intelligence/feed/",
+    "https://openai.com/news/rss.xml",
+    "https://blog.google/technology/ai/rss/",
+    "https://deepmind.google/blog/rss.xml",
+    "https://huggingface.co/blog/feed.xml",
+    "https://www.channelnewsasia.com/rssfeeds/8395744",
+    "https://udn.com/rssfeed/news/2/WORLD?ch=news",
+    "https://udn.com/rssfeed/news/2/FINANCE?ch=news",
+    "https://star.ettoday.net/rss.xml",
 }
 
 
