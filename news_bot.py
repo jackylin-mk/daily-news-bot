@@ -42,7 +42,7 @@ RSS_FEEDS = {
     ],
     "🌍 國際新聞": [
         "https://news.ltn.com.tw/rss/world.xml",
-        "https://www.cna.com.tw/rss/aall.xml",
+        "https://www.cna.com.tw/rss/aall.aspx",
     ],
     "💻 科技新聞": [
         "https://feeds.feedburner.com/ithome",
@@ -50,25 +50,24 @@ RSS_FEEDS = {
     ],
     "🤖 AI 新聞": [
         # 英文科技媒體
-        "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",  # The Verge AI
-        "https://venturebeat.com/ai/feed/",                                    # VentureBeat AI
+        "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",  # The Verge AI
+        "https://venturebeat.com/category/ai/feed/",                           # VentureBeat AI
         "https://techcrunch.com/tag/artificial-intelligence/feed/",            # TechCrunch AI
         # 美國大廠官方 Blog
         "https://openai.com/news/rss.xml",                                     # OpenAI 官方
         "https://blog.google/technology/ai/rss/",                              # Google AI Blog
         "https://deepmind.google/blog/rss.xml",                                # Google DeepMind
-        "https://buttondown.com/anthropic/rss",                                # Anthropic Newsletter
+        "https://www.anthropic.com/blog/rss",                                  # Anthropic Blog
         # 新加坡與亞太
         "https://www.channelnewsasia.com/rssfeeds/8395744",                    # CNA Science & Tech
-        "https://www.techinasia.com/feed",                                     # Tech in Asia
     ],
     "💰 財經新聞": [
         "https://news.ltn.com.tw/rss/business.xml",
-        "https://www.cna.com.tw/rss/aafe.xml",
+        "https://www.cna.com.tw/rss/aafe.aspx",
     ],
     "🎭 娛樂休閒": [
         "https://news.ltn.com.tw/rss/entertainment.xml",
-        "https://feeds.feedburner.com/ettoday/entertainment",
+        "https://www.ettoday.net/news/rss2.xml",
     ],
 }
 
