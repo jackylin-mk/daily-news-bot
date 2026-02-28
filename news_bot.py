@@ -201,9 +201,17 @@ def parse_rss(xml_text: str, max_items: int = MAX_ITEMS_PER_FEED, skip_date_filt
 
 # 英文來源不做日期過濾（因為美國時間比台灣晚，早上跑時文章日期還是昨天）
 EN_FEEDS = {
-    "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",
-    "https://venturebeat.com/ai/feed/",
+    "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    "https://venturebeat.com/category/ai/feed/",
     "https://techcrunch.com/tag/artificial-intelligence/feed/",
+    "https://openai.com/news/rss.xml",
+    "https://blog.google/technology/ai/rss/",
+    "https://deepmind.google/blog/rss.xml",
+    "https://huggingface.co/blog/feed.xml",
+    "https://www.channelnewsasia.com/rssfeeds/8395744",
+    "https://udn.com/rssfeed/news/2/WORLD?ch=news",
+    "https://udn.com/rssfeed/news/2/FINANCE?ch=news",
+    "https://star.ettoday.net/rss.xml",
 }
 
 
