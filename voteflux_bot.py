@@ -1,8 +1,20 @@
 """
-VoteFlux 每日市場研究報告
-- 使用 OpenAI API (GPT-4o-mini) 以資深預測投注玩家視角分析競品
-- 產生完整 HTML 報告部署到 GitHub Pages
-- 推播報告連結到 Telegram
+VoteFlux 每日競品戰報
+
+AI 角色：預測市場資深玩家（10 年老手），風格直接犀利
+AI 模型：OpenAI GPT-4o-mini
+輸出格式：HTML 報告（GitHub Pages）+ Telegram 推播連結
+排程觸發：Cloudflare Workers Cron → GitHub Actions（每天台灣時間 08:00）
+
+報告內容：
+  - DAILY DISCOVERY：三步驟競爭選拔當日最值得關注的競品
+  - 競品評分總覽：6 大平台 × 6 固定維度（1-10 分顏色標示）
+  - 各平台詳細點評：每個維度分數 + 老玩家犀利評語
+  - 今日觀察與碎碎念：第一人稱市場觀察
+  - 給 VoteFlux 的建議：實際可執行的改進方向
+  - 各市場熱門題目：印度 · 孟加拉 · 越南 · 馬來西亞 · 菲律賓 · 泰國
+
+固定分析維度：流動性深度 · 費用結構 · 出入金便利性 · 盤口豐富度 · 監管合規 · 介面體驗
 """
 
 import os
@@ -90,6 +102,7 @@ def generate_report_data() -> dict:
 4. **給 VoteFlux 的建議**：3-5 條實際可執行的建議。
 
 5. **各市場熱門題目**：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，各 2 題。
+   ⚠️ 題目必須與當前時事相關（現在是 {TODAY_STR}），不可推薦已發生的歷史事件（例如 2024 年大選結果），應聚焦在未來 1 週以上、結果尚未確定的題目。
 
 只輸出 JSON，結構：
 {{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":"","runner_up":"落選平台名稱：落選原因一句話"}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
@@ -318,7 +331,7 @@ def build_html(data: dict) -> str:
 <div class="discovery">
     <span class="badge">TODAY'S FIND</span>
     <div class="platform-name">{dd['name']}</div>
-    <div class="url">{dd.get('url', '')}</div>
+    <a class="url" href="{dd.get('url', '#')}" target="_blank">{dd.get('url', '')}</a>
     <p>{dd['description']}</p>
     <div class="veteran-take">{dd['veteran_take']}</div>
     {f'<div style="margin-top:10px;font-size:0.85em;color:#8b949e;">🥈 落選候選人：{dd["runner_up"]}</div>' if dd.get('runner_up') else ''}
