@@ -1,8 +1,16 @@
 """
-每日新聞摘要 Telegram Bot
-- 抓取台灣綜合、國際、科技、財經新聞 (RSS)
-- 使用 Google Gemini API (Gemini 1.5 Flash) 產生中文摘要 — 完全免費
-- 推播到 Telegram
+每日新聞摘要 Telegram Bot（免費版）
+
+新聞分類：台灣綜合 · 國際 · 科技 · AI · 娛樂休閒 · 財經
+AI 摘要：Google Gemini 1.5 Flash（免費方案，每天 1,500 次請求）
+推播方式：Telegram（支援多人）
+排程觸發：Cloudflare Workers Cron → GitHub Actions（每天台灣時間 08:00）
+
+過濾機制：
+  - 日期過濾：只保留當天新聞（英文來源不受時區影響）
+  - 去重複：跨天記錄已推播標題，避免重複出現
+  - 黑名單：TITLE_BLACKLIST 關鍵字直接過濾
+  - 手動測試模式：workflow_dispatch 觸發時不寫入記錄，方便反覆測試
 """
 
 import os
