@@ -12,7 +12,6 @@ AI 模型：OpenAI GPT-4o-mini
   - 各平台詳細點評：每個維度分數 + 老玩家犀利評語
   - 今日觀察與碎碎念：第一人稱市場觀察
   - 給 VoteFlux 的建議：實際可執行的改進方向
-  - 各市場熱門題目：印度 · 孟加拉 · 越南 · 馬來西亞 · 菲律賓 · 泰國
 
 固定分析維度：流動性深度 · 費用結構 · 出入金便利性 · 盤口豐富度 · 監管合規 · 介面體驗
 """
@@ -36,65 +35,6 @@ TODAY_FILE = TODAY.strftime("%Y-%m-%d")
 
 
 # ─── OpenAI API 呼叫 ────────────────────────────────────
-def _web_search(query: str) -> str:
-    """呼叫 OpenAI Responses API 執行單一 web search 任務"""
-    body = json.dumps({
-        "model": "gpt-4o-mini",
-        "tools": [{"type": "web_search_preview"}],
-        "input": query,
-    }).encode("utf-8")
-
-    req = Request(
-        "https://api.openai.com/v1/responses",
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-        },
-        method="POST",
-    )
-
-    with urlopen(req, timeout=90) as resp:
-        data = json.loads(resp.read().decode())
-
-    for item in data.get("output", []):
-        if item.get("type") == "message":
-            for block in item.get("content", []):
-                if block.get("type") == "output_text":
-                    return block.get("text", "")
-    return ""
-
-
-def fetch_market_topics() -> str:
-    """
-    web search：直接瀏覽 Polymarket / Kalshi 抓真實熱門題目
-    若抓不到熱門題目，該國家不列出題目
-    """
-    print("  🔍 蒐集各大預測投注平台 Top 20 熱門題目...")
-    try:
-        part1 = _web_search(
-            f"今天是 {TODAY_STR}。"
-            "請瀏覽以下預測市場平台，蒐集目前交易量或關注度最高的前 20 個熱門題目原文（英文）：\n"
-            "- Polymarket（polymarket.com）\n"
-            "- Kalshi（kalshi.com）\n"
-            "- Metaculus（metaculus.com）\n"
-            "- Manifold Markets（manifold.markets）\n"
-            "- Betfair（betfair.com）\n"
-            "地區限定：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，涵蓋體育、財經、政治、娛樂、科技等所有類型。"
-            "每道題請附上：題目原文、來源平台、所屬地區/國家（若可辨識）。"
-            "只列出真實存在的題目，不要分析或說明。"
-        )
-        if part1:
-            print("  ✅ 蒐集完成")
-            return "【各大預測平台 Top 20 熱門題目（原文）】\n" + part1
-        else:
-            print("  ⚠️ 未取得資料")
-            return ""
-    except Exception as e:
-        print(f"  ⚠️ 失敗: {e}")
-        return ""
-
-
 def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> str:
     """
     呼叫 OpenAI Chat Completions API。
@@ -165,22 +105,6 @@ SYSTEM_PROMPT = """你是一位在預測市場（Prediction Market）打滾超�
 
 
 def generate_report_data() -> dict:
-    # 先用 web search 抓取 Polymarket / Kalshi 真實熱門題目作為參考
-    print("🔍 正在搜尋 Polymarket / Kalshi 熱門題目...")
-    market_reference = fetch_market_topics()
-    if market_reference:
-        print("✅ 取得熱門題目參考資料")
-    else:
-        print("⚠️ 未取得參考資料，將由 AI 自行生成")
-
-    market_ref_section = f"""
-以下是從 Polymarket / Kalshi 搜尋到的真實熱門題目。
-出題時必須以【已蒐集到的題目】為基礎，不可使用未出現在下方清單中的賽事或事件：
----
-{market_reference}
----
-""" if market_reference else ""
-
     user_prompt = f"""幫我寫今天的競品日報。規則如下：
 
 1. **DAILY DISCOVERY**
@@ -205,25 +129,8 @@ def generate_report_data() -> dict:
 
 4. **給 VoteFlux 的建議**：3-5 條實際可執行的建議。
 
-5. **各市場熱門題目**：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，各 3 題。
-
-   【核心規則：只能彙整，不能發明】
-   所有題目必須直接來自上方【各大預測平台 Top 20 熱門題目】。
-   流程：① 從蒐集到的素材中篩選與各國相關的題目 → ② 翻譯成繁體中文 → ③ 微調格式使其符合 Yes/No 公式。
-   ⚠️ 若某個國家在素材中完全找不到相關題目，則直接略過該國，不列出任何題目。寧可某國缺席，絕對不可自行發明。
-
-   【Yes/No 題目公式】
-   「[具體主詞] 是否會在 [明確日期] 前 [具體動作 + 數字/官方名稱]？」
-
-   【絕對禁止——違反立即刪除，寧可該國題數不足】
-   ❌ 禁止自行發明任何題目——所有題目必須有素材來源可追溯
-   ❌ 禁止模糊動詞：「放寬」「加強」「全面」「重大」「調整」「作出決策」「清楚地」→ 必須有具體數字
-   ❌ 禁止行政事務：「賽程安排」「名單確定」「場地準備」等必然發生的事
-   ❌ 禁止「哪個/哪些/多少/什麼」開頭——不是 Yes/No
-   ❌ 禁止無法驗證的統計題：「電影上映部數」「產業統計數字」等結算標準不明確的題目
-
-{market_ref_section}只輸出 JSON，結構：
-{{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":"","runner_up":"落選平台名稱：落選原因一句話"}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
+{TODAY_STR}只輸出 JSON，結構：
+{{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":"","runner_up":"落選平台名稱：落選原因一句話"}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[]}}
 
 competitor_analysis 必須包含 6 個平台，scores/comments 的 key 必須與 analysis_dimensions 完全一致。今天是 {TODAY_STR}。"""
 
@@ -300,17 +207,6 @@ def build_html(data: dict) -> str:
     advice_html = ""
     for i, a in enumerate(data["voteflux_advice"], 1):
         advice_html += f'<div class="action-item">🎯 <b>#{i}</b> {a}</div>\n'
-
-    # ── 市場題目
-    flags = {"印度": "🇮🇳", "孟加拉": "🇧🇩", "越南": "🇻🇳", "馬來西亞": "🇲🇾", "菲律賓": "🇵🇭", "泰國": "🇹🇭"}
-    markets_html = ""
-    for m in data["market_topics"]:
-        flag = flags.get(m["market"], "🌏")
-        topics = "".join(f"<li>{t}</li>" for t in m["topics"])
-        markets_html += f"""<div class="market-card">
-            <h3>{flag} {m['market']}</h3>
-            <ul>{topics}</ul>
-        </div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="zh-TW">
@@ -410,18 +306,6 @@ def build_html(data: dict) -> str:
         padding: 15px 20px; margin: 10px 0; border-radius: 0 8px 8px 0;
     }}
 
-    /* Market Cards */
-    .markets-grid {{
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: 15px; margin: 15px 0;
-    }}
-    .market-card {{
-        background: #161b22; border: 1px solid #21262d;
-        border-radius: 10px; padding: 20px;
-    }}
-    .market-card ul {{ margin-top: 10px; padding-left: 20px; }}
-    .market-card li {{ margin: 8px 0; color: #c9d1d9; }}
-
     /* Footer */
     .footer {{
         text-align: center; margin-top: 50px; padding-top: 20px;
@@ -430,7 +314,7 @@ def build_html(data: dict) -> str:
 
     @media (max-width: 768px) {{
         body {{ padding: 12px; }}
-        .comp-cards, .markets-grid {{ grid-template-columns: 1fr; }}
+        .comp-cards {{ grid-template-columns: 1fr; }}
         table {{ font-size: 0.8em; }}
         th, td {{ padding: 8px 10px; }}
     }}
@@ -479,12 +363,6 @@ def build_html(data: dict) -> str:
 <!-- VoteFlux 建議 -->
 <h2>⚔️ 給 VoteFlux 的建議</h2>
 {advice_html}
-
-<!-- 市場題目 -->
-<h2>🌏 各市場熱門題目推薦</h2>
-<div class="markets-grid">
-    {markets_html}
-</div>
 
 <div class="footer">
     <p>© 2026 VoteFlux Daily Intelligence | Generated by AI | 本報告僅供參考，不構成任何投資建議</p>
