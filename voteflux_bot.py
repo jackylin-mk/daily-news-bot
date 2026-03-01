@@ -36,6 +36,43 @@ TODAY_FILE = TODAY.strftime("%Y-%m-%d")
 
 
 # ─── OpenAI API 呼叫 ────────────────────────────────────
+def fetch_market_topics() -> str:
+    """用 OpenAI web search 抓取 Polymarket 和 Kalshi 的熱門題目作為參考"""
+    body = json.dumps({
+        "model": "gpt-4o-mini",
+        "tools": [{"type": "web_search_preview"}],
+        "input": (
+            "請搜尋 Polymarket（polymarket.com）和 Kalshi（kalshi.com）目前熱門的預測市場題目，"
+            "特別是與以下地區相關的題目：印度、孟加拉、越南、馬來西亞、菲律賓、泰國。"
+            "列出你找到的真實題目（原文即可），這些題目將作為我撰寫各市場熱門題目推薦的參考範例。"
+        ),
+    }).encode("utf-8")
+
+    req = Request(
+        "https://api.openai.com/v1/responses",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+        # 從 output 裡找 message 類型的文字回應
+        for item in data.get("output", []):
+            if item.get("type") == "message":
+                for block in item.get("content", []):
+                    if block.get("type") == "output_text":
+                        return block.get("text", "")
+        return ""
+    except Exception as e:
+        print(f"⚠️ web search 抓取熱門題目失敗: {e}")
+        return ""
+
+
 def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> str:
     body = json.dumps({
         "model": model,
@@ -77,6 +114,21 @@ SYSTEM_PROMPT = """你是一位在預測市場（Prediction Market）打滾超�
 
 
 def generate_report_data() -> dict:
+    # 先用 web search 抓取 Polymarket / Kalshi 真實熱門題目作為參考
+    print("🔍 正在搜尋 Polymarket / Kalshi 熱門題目...")
+    market_reference = fetch_market_topics()
+    if market_reference:
+        print("✅ 取得熱門題目參考資料")
+    else:
+        print("⚠️ 未取得參考資料，將由 AI 自行生成")
+
+    market_ref_section = f"""
+以下是我從 Polymarket 和 Kalshi 搜尋到的真實熱門題目，請參考這些題目的「格式與風格」來出各市場題目：
+---
+{market_reference}
+---
+""" if market_reference else ""
+
     user_prompt = f"""幫我寫今天的競品日報。規則如下：
 
 1. **DAILY DISCOVERY**
@@ -102,15 +154,23 @@ def generate_report_data() -> dict:
 4. **給 VoteFlux 的建議**：3-5 條實際可執行的建議。
 
 5. **各市場熱門題目**：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，各 2 題。
-   題目規則：
-   - 必須是可以用「是/否（Yes/No）」回答的預測問題
-   - 題目要具體、可驗證，有明確的判斷標準（例如：某人會當選、某政策會通過、某指數會突破某數字）
-   - 結果必須在未來 1 週～3 個月內揭曉
+   題目必須符合以下所有條件：
+   - 可以用「是/否（Yes/No）」回答
+   - 有唯一、客觀的判斷標準——結果出來後任何人看都只有一個答案，不存在爭議空間
+   - 判斷基準必須是以下之一：①具體數字門檻（指數、匯率、利率）②官方正式公告或聲明 ③選舉/投票結果 ④特定人物的具體行動（上任、辭職、被捕）
    - 不可推薦已發生的歷史事件（現在是 {TODAY_STR}）
-   - 避免模糊問題（例如「會面臨挑戰嗎」、「會有影響嗎」這類無法明確判斷的題目）
-   好的題目範例：「印度央行會在本月例會降息嗎？」、「菲律賓比索兌美元匯率會在本季突破 57 嗎？」
+   
+   ❌ 不合格範例（判斷標準模糊）：
+   - 「馬來西亞政府會在未來一週內面臨社會運動嗎？」→ 社會運動定義不清
+   - 「孟加拉會否有重大政治變動？」→ 重大的標準是什麼？
+   - 「越南會維持研發經費增長嗎？」→ 誰公布？何時確認？
+   
+   ✅ 合格範例（判斷標準明確）：
+   - 「印度央行會在 2026 年 4 月例會上調降基準利率嗎？」
+   - 「菲律賓比索兌美元匯率會在 2026 年 Q2 結束前跌破 60 嗎？」
+   - 「馬來西亞首相安華會在 2026 年上半年完成內閣改組嗎？」
 
-只輸出 JSON，結構：
+{market_ref_section}只輸出 JSON，結構：
 {{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":"","runner_up":"落選平台名稱：落選原因一句話"}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
 
 competitor_analysis 必須包含 6 個平台，scores/comments 的 key 必須與 analysis_dimensions 完全一致。今天是 {TODAY_STR}。"""
