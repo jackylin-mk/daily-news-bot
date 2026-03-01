@@ -1,33 +1,37 @@
-name: 預測市場週報（每週一 08:00）
+name: 預測市場週報
 
 on:
-  workflow_dispatch:   # 手動觸發（測試用，去重複自動停用）
+  workflow_dispatch:
   repository_dispatch:
-    types: [weekly-report]  # Cloudflare Worker 觸發
+    types: [weekly-report]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
-  weekly-report:
+  generate-report:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-
+    outputs:
+      report_generated: ${{ steps.check.outputs.exists }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
       - name: Run Weekly Report Bot
+        id: bot
+        continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_PAGES_URL: ${{ secrets.GITHUB_PAGES_URL }}
+          GITHUB_PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: python voteflux_weekly.py
 
       - name: Commit & Push Report
@@ -38,7 +42,34 @@ jobs:
           git diff --cached --quiet || git commit -m "📊 週報 $(date +'%Y-%m-%d')"
           git push
 
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+      - name: Check if report was generated
+        id: check
+        run: |
+          if [ -d "reports" ] && [ "$(ls -A reports)" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ reports 資料夾存在"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "❌ reports 資料夾不存在，跳過部署"
+          fi
+
+      - name: Upload Pages artifact
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
-          artifact_name: github-pages
+          path: reports
+
+  deploy-pages:
+    needs: generate-report
+    if: needs.generate-report.outputs.report_generated == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
