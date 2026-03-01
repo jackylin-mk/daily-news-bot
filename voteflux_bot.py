@@ -36,18 +36,12 @@ TODAY_FILE = TODAY.strftime("%Y-%m-%d")
 
 
 # ─── OpenAI API 呼叫 ────────────────────────────────────
-def fetch_market_topics() -> str:
-    """用 OpenAI web search 抓取 Polymarket 和 Kalshi 的熱門題目作為參考"""
+def _web_search(query: str) -> str:
+    """呼叫 OpenAI Responses API 執行單一 web search 任務"""
     body = json.dumps({
         "model": "gpt-4o-mini",
         "tools": [{"type": "web_search_preview"}],
-        "input": (
-            "請直接搜尋並瀏覽 Polymarket（polymarket.com）和 Kalshi（kalshi.com）網站，"
-            "列出目前交易量最高的熱門預測市場題目，涵蓋以下類型：體育賽事、娛樂/頒獎典禮、"
-            "科技/AI產品發布、加密貨幣價格、政治選舉、財經指標。"
-            "特別標注與印度、孟加拉、越南、馬來西亞、菲律賓、泰國相關的題目。"
-            "直接列出真實題目原文，不要加任何分析或說明，題目格式要和 Polymarket/Kalshi 一致。"
-        ),
+        "input": query,
     }).encode("utf-8")
 
     req = Request(
@@ -60,19 +54,61 @@ def fetch_market_topics() -> str:
         method="POST",
     )
 
+    with urlopen(req, timeout=90) as resp:
+        data = json.loads(resp.read().decode())
+
+    for item in data.get("output", []):
+        if item.get("type") == "message":
+            for block in item.get("content", []):
+                if block.get("type") == "output_text":
+                    return block.get("text", "")
+    return ""
+
+
+def fetch_market_topics() -> str:
+    """
+    兩次獨立 web search：
+    任務一：直接瀏覽 Polymarket / Kalshi 抓真實熱門題目
+    任務二：查證各市場 2026 年確認存在的真實事件
+    """
+    result_parts = []
+
+    # ── 任務一：爬 Polymarket / Kalshi 真實題目 ──────────
+    print("  🔍 任務一：爬取 Polymarket / Kalshi 真實熱門題目...")
     try:
-        with urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode())
-        # 從 output 裡找 message 類型的文字回應
-        for item in data.get("output", []):
-            if item.get("type") == "message":
-                for block in item.get("content", []):
-                    if block.get("type") == "output_text":
-                        return block.get("text", "")
-        return ""
+        part1 = _web_search(
+            "請直接瀏覽並擷取 https://polymarket.com 和 https://kalshi.com 網站上，"
+            "目前交易量最高的前 20 個預測市場題目原文（英文）。"
+            "只需列出題目原文，不需要任何說明或分析。"
+            "涵蓋體育、娛樂、科技、加密貨幣、財經、政治各類型。"
+        )
+        if part1:
+            result_parts.append("【Polymarket / Kalshi 真實熱門題目】\n" + part1)
+            print("  ✅ 任務一完成")
+        else:
+            print("  ⚠️ 任務一：未取得資料")
     except Exception as e:
-        print(f"⚠️ web search 抓取熱門題目失敗: {e}")
-        return ""
+        print(f"  ⚠️ 任務一失敗: {e}")
+
+    # ── 任務二：查證各市場 2026 年真實事件 ───────────────
+    print("  🔍 任務二：查證各市場 2026 年真實事件...")
+    try:
+        part2 = _web_search(
+            "請搜尋新聞，查證以下 6 個國家在 2026 年確認會發生的重要事件，"
+            "每個國家列出 2~3 個有新聞來源佐證的事件（體育賽事、選舉、央行會議、重大政策）：\n"
+            "印度、孟加拉、越南、馬來西亞、菲律賓、泰國。\n"
+            "注意：2026 年沒有東南亞運動會（SEA Games），不可列入。"
+            "所有事件必須來自可查證的新聞，不可捏造。每個事件請附上預計時間。"
+        )
+        if part2:
+            result_parts.append("【各市場 2026 年已查證真實事件】\n" + part2)
+            print("  ✅ 任務二完成")
+        else:
+            print("  ⚠️ 任務二：未取得資料")
+    except Exception as e:
+        print(f"  ⚠️ 任務二失敗: {e}")
+
+    return "\n\n".join(result_parts)
 
 
 def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> str:
@@ -125,7 +161,8 @@ def generate_report_data() -> dict:
         print("⚠️ 未取得參考資料，將由 AI 自行生成")
 
     market_ref_section = f"""
-以下是我從 Polymarket 和 Kalshi 搜尋到的真實熱門題目，請參考這些題目的「格式與風格」來出各市場題目：
+以下是從 Polymarket / Kalshi 搜尋到的真實熱門題目，以及各市場已查證的 2026 年真實事件。
+出題時必須以【已查證的真實事件】為基礎，不可使用未出現在下方清單中的賽事或事件：
 ---
 {market_reference}
 ---
@@ -183,9 +220,10 @@ def generate_report_data() -> dict:
    - 「菲律賓職業籃球聯盟（PBA）將於 2026 年增加哪些新隊伍？」→ 這不是 Yes/No 題，應改為「PBA 是否會在 2026 年賽季新增第 13 支球隊？」
 
    ⚠️ 額外禁止事項：
-   - 禁止使用模糊動詞：「量產」、「全面啟用」、「大幅成長」、「顯著提升」→ 必須換成具體數字
-   - 禁止捏造賽事：出題前先確認該賽事在指定年份確實存在
-   - 禁止「哪個/哪些/多少」開頭的題目：這類問題永遠不是 Yes/No
+   - 禁止使用模糊動詞：「量產」、「全面啟用」、「大幅成長」、「再次」、「全國」→ 必須換成具體數字或官方名稱
+   - 禁止捏造或未查證的賽事與事件：所有題目必須基於上方【任務二】查證到的真實事件，不可自行推測
+   - 禁止「哪個/哪些/多少/什麼」開頭的題目：這類問題永遠不是 Yes/No
+   - 禁止以「已知答案」的歷史事件出題：若事件結果已可從新聞查到，則不得作為預測題目
    
    ✅ 合格題目的必要元素：主詞明確 + 動作具體 + 數字門檻或官方聲明 + 截止時間點
 
