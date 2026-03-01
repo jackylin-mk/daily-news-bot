@@ -227,6 +227,14 @@ def generate_report_data() -> dict:
    
    ✅ 合格題目的必要元素：主詞明確 + 動作具體 + 數字門檻或官方聲明 + 截止時間點
 
+   出題後請對每道題自我審查，逐一確認以下三點，任何一點不符就必須重寫：
+   ① 把題目中的關鍵動詞/名詞換成「???」，能填入唯一答案嗎？→ 不能代表定義模糊
+      例：「會全面禁止???嗎」→「全面」是什麼？→ 重寫為「泰國政府是否會在 2026 年 12 月前正式公告禁止所有零售商提供一次性塑膠袋？」
+      例：「會實施新的碳排放法案嗎」→ 哪部法案？→ 重寫為「馬來西亞《碳稅法案 2025》是否會在 2026 年 Q3 前完成國會三讀？」
+      例：「會出現重大社會事件嗎」→「重大」怎麼定義？→ 此類題目直接刪除，換一個完全不同的題目
+   ② 題目是 Yes/No 題嗎？不是就刪掉重出
+   ③ 事件在現實中確認存在嗎？不確定就換一個有把握的題目
+
 {market_ref_section}只輸出 JSON，結構：
 {{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":"","runner_up":"落選平台名稱：落選原因一句話"}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
 
