@@ -36,30 +36,13 @@ TODAY_FILE = TODAY.strftime("%Y-%m-%d")
 
 # ─── OpenAI API 呼叫 ────────────────────────────────────
 def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> str:
-    """
-    呼叫 OpenAI Chat Completions API。
-    System prompt 使用 prompt caching（cache_control: ephemeral）。
-    快取條件：system prompt >= 1024 tokens，快取命中可節省 50% token 費用。
-    動態內容（web search 結果、日期）放在 user prompt，不快取。
-    """
+    """呼叫 OpenAI Chat Completions API。"""
     body = json.dumps({
         "model": model,
-        "max_tokens": 4096,
+        "max_tokens": 2000,
         "messages": [
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"},  # ← 快取 system prompt
-                    }
-                ],
-            },
-            {
-                "role": "user",
-                "content": user_prompt,  # ← 動態內容不快取
-            },
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ],
     }).encode("utf-8")
 
@@ -75,15 +58,6 @@ def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini"
 
     with urlopen(req, timeout=120) as resp:
         data = json.loads(resp.read().decode())
-
-    # 印出快取命中狀況（方便 debug）
-    usage = data.get("usage", {})
-    cached = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
-    total_prompt = usage.get("prompt_tokens", 0)
-    if cached:
-        print(f"  💾 Prompt cache 命中：{cached}/{total_prompt} tokens（節省 {cached*0.5:.0f} tokens 費用）")
-    else:
-        print(f"  📝 Prompt cache 未命中（首次呼叫或快取過期），prompt tokens: {total_prompt}")
 
     return data["choices"][0]["message"]["content"]
 
