@@ -102,7 +102,13 @@ def generate_report_data() -> dict:
 4. **給 VoteFlux 的建議**：3-5 條實際可執行的建議。
 
 5. **各市場熱門題目**：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，各 2 題。
-   ⚠️ 題目必須與當前時事相關（現在是 {TODAY_STR}），不可推薦已發生的歷史事件（例如 2024 年大選結果），應聚焦在未來 1 週以上、結果尚未確定的題目。
+   題目規則：
+   - 必須是可以用「是/否（Yes/No）」回答的預測問題
+   - 題目要具體、可驗證，有明確的判斷標準（例如：某人會當選、某政策會通過、某指數會突破某數字）
+   - 結果必須在未來 1 週～3 個月內揭曉
+   - 不可推薦已發生的歷史事件（現在是 {TODAY_STR}）
+   - 避免模糊問題（例如「會面臨挑戰嗎」、「會有影響嗎」這類無法明確判斷的題目）
+   好的題目範例：「印度央行會在本月例會降息嗎？」、「菲律賓比索兌美元匯率會在本季突破 57 嗎？」
 
 只輸出 JSON，結構：
 {{"daily_discovery":{{"name":"","url":"","description":"","veteran_take":"","runner_up":"落選平台名稱：落選原因一句話"}},"analysis_dimensions":[],"competitor_analysis":[{{"name":"","scores":{{}},"comments":{{}},"overall_verdict":""}}],"daily_notes":[],"voteflux_advice":[],"market_topics":[{{"market":"","topics":[]}}]}}
@@ -420,12 +426,14 @@ def send_telegram(text: str):
             print(f"✅ 訊息已發送到 {chat_id}")
         except Exception as e:
             print(f"⚠️ Telegram HTML 發送失敗 (chat_id: {chat_id}): {e}")
-            plain = re.sub(r'<[^>]+>', '', text)
+            # fallback：保留 <a href> 的 URL，避免連結消失
+            plain = re.sub(r'<a href="([^"]+)">[^<]*</a>', r'\1', text)
+            plain = re.sub(r'<[^>]+>', '', plain)
             body2 = json.dumps({"chat_id": chat_id, "text": plain}).encode("utf-8")
             req2 = Request(url, data=body2, headers={"Content-Type": "application/json"}, method="POST")
             with urlopen(req2, timeout=15) as resp2:
                 pass
-            print(f"✅ 訊息已發送到 {chat_id}（純文字 fallback）")
+            print(f"✅ 訊息已發送到 {chat_id}（純文字 fallback，含 URL）")
 
 
 # ─── 主程式 ──────────────────────────────────────────────
