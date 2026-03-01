@@ -67,14 +67,10 @@ def _web_search(query: str) -> str:
 
 def fetch_market_topics() -> str:
     """
-    兩次獨立 web search：
-    任務一：直接瀏覽 Polymarket / Kalshi 抓真實熱門題目
-    任務二：查證各市場「今天之後」確認存在的近期真實事件（動態，不寫死年份）
+    web search：直接瀏覽 Polymarket / Kalshi 抓真實熱門題目
+    若抓不到熱門題目，該國家不列出題目
     """
-    result_parts = []
-
-    # ── 任務一：蒐集各大預測平台 Top 20 熱門題目 ──────────
-    print("  🔍 任務一：蒐集各大預測投注平台 Top 20 熱門題目...")
+    print("  🔍 蒐集各大預測投注平台 Top 20 熱門題目...")
     try:
         part1 = _web_search(
             f"今天是 {TODAY_STR}。"
@@ -89,37 +85,14 @@ def fetch_market_topics() -> str:
             "只列出真實存在的題目，不要分析或說明。"
         )
         if part1:
-            result_parts.append("【各大預測平台 Top 20 熱門題目（原文）】\n" + part1)
-            print("  ✅ 任務一完成")
+            print("  ✅ 蒐集完成")
+            return "【各大預測平台 Top 20 熱門題目（原文）】\n" + part1
         else:
-            print("  ⚠️ 任務一：未取得資料")
+            print("  ⚠️ 未取得資料")
+            return ""
     except Exception as e:
-        print(f"  ⚠️ 任務一失敗: {e}")
-
-    # ── 任務二：查證各市場近期真實事件（動態日期）────────
-    print(f"  🔍 任務二：查證各市場近期真實事件（{TODAY_STR} 之後）...")
-    try:
-        part2 = _web_search(
-            f"今天是 {TODAY_STR}。"
-            "請搜尋新聞，查證以下 6 個國家在「今天之後」即將發生的重要事件，"
-            "包含體育賽事（板球、足球、籃球等）、選舉、央行利率會議、重大政策發布。"
-            "每個國家列出 2~3 個有新聞來源佐證的近期事件，並附上預計日期：\n"
-            "印度、孟加拉、越南、馬來西亞、菲律賓、泰國。\n"
-            "查證規則：\n"
-            "- 只列出今天之後確認會發生的事件，不列已發生的歷史事件\n"
-            "- 每個事件必須附上具體日期或時間範圍（例如：今年Q2、6月15日、下個月）\n"
-            "- 如果某國近期沒有重大體育賽事，改列財經或政治事件\n"
-            "- 所有事件必須來自可查證的新聞來源，不可捏造"
-        )
-        if part2:
-            result_parts.append(f"【各市場近期已查證真實事件（{TODAY_STR} 之後）】\n" + part2)
-            print("  ✅ 任務二完成")
-        else:
-            print("  ⚠️ 任務二：未取得資料")
-    except Exception as e:
-        print(f"  ⚠️ 任務二失敗: {e}")
-
-    return "\n\n".join(result_parts)
+        print(f"  ⚠️ 失敗: {e}")
+        return ""
 
 
 def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini") -> str:
@@ -201,8 +174,8 @@ def generate_report_data() -> dict:
         print("⚠️ 未取得參考資料，將由 AI 自行生成")
 
     market_ref_section = f"""
-以下是從 Polymarket / Kalshi 搜尋到的真實熱門題目，以及各市場已查證的近期真實事件（今天之後）。
-出題時必須以【已查證的真實事件】為基礎，不可使用未出現在下方清單中的賽事或事件：
+以下是從 Polymarket / Kalshi 搜尋到的真實熱門題目。
+出題時必須以【已蒐集到的題目】為基礎，不可使用未出現在下方清單中的賽事或事件：
 ---
 {market_reference}
 ---
@@ -235,9 +208,9 @@ def generate_report_data() -> dict:
 5. **各市場熱門題目**：印度、孟加拉、越南、馬來西亞、菲律賓、泰國，各 3 題。
 
    【核心規則：只能彙整，不能發明】
-   所有題目必須直接來自上方【各大預測平台 Top 20 熱門題目】或【各市場近期已查證真實事件】。
+   所有題目必須直接來自上方【各大預測平台 Top 20 熱門題目】。
    流程：① 從蒐集到的素材中篩選與各國相關的題目 → ② 翻譯成繁體中文 → ③ 微調格式使其符合 Yes/No 公式。
-   ⚠️ 若某個國家在素材中找不到足夠題目，該國題目數量可以少於 3 題，但絕對不可自行發明。
+   ⚠️ 若某個國家在素材中完全找不到相關題目，則直接略過該國，不列出任何題目。寧可某國缺席，絕對不可自行發明。
 
    【Yes/No 題目公式】
    「[具體主詞] 是否會在 [明確日期] 前 [具體動作 + 數字/官方名稱]？」
