@@ -4,7 +4,7 @@ on:
   workflow_dispatch:   # 只能手動觸發，不會自動跑
 
 jobs:
-  send-news-gemini:
+  send-news-groq:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run Gemini News Bot
+      - name: Run Groq News Bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
