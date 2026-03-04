@@ -1,5 +1,4 @@
 # 🚀 新手指引：每天早上自動收到 AI 新聞摘要
-
 > 完全免費 · 不需要寫程式 · 設定一次，每天自動推播到 Telegram
 
 ---
@@ -13,6 +12,7 @@
 - 💻 科技新聞
 - 🤖 AI 新聞（Claude、Gemini、OpenAI、nVidia 等）
 - 💰 財經新聞
+- 🎭 娛樂休閒
 
 ---
 
@@ -23,7 +23,7 @@
 | Telegram Bot | ✅ 免費 |
 | GitHub | ✅ 免費 |
 | Cloudflare Workers | ✅ 免費 |
-| Google Gemini API | ✅ 免費（每天 1,500 次，Bot 每天只用 1 次） |
+| Google Gemini API | ✅ 免費（每天 500 次，Bot 每天只用 6 次） |
 | **合計** | **完全免費** |
 
 ---
@@ -80,7 +80,7 @@
 
    **📌 把這串 Key 複製起來備用**
 
-> ✅ 免費方案每天有 1,500 次請求額度，Bot 每天只用 1 次，完全夠用。不需要綁信用卡。
+> ✅ 免費方案每天有 500 次請求額度，Bot 每天只用 6 次（每個新聞分類各 1 次），完全夠用。不需要綁信用卡。
 
 ---
 
@@ -173,9 +173,7 @@ export default {
     const owner = env.GITHUB_OWNER;
     const repo = env.GITHUB_REPO;
     const token = env.GITHUB_TOKEN;
-
     const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/daily-news.yml/dispatches`;
-
     const resp = await fetch(url, {
       method: "POST",
       headers: {
@@ -185,7 +183,6 @@ export default {
       },
       body: JSON.stringify({ ref: "main" }),
     });
-
     if (resp.ok || resp.status === 204) {
       console.log("✅ daily-news.yml 觸發成功");
     } else {
@@ -193,7 +190,6 @@ export default {
       console.error(`❌ 觸發失敗: ${resp.status} ${body}`);
     }
   },
-
   async fetch(request, env) {
     return new Response("Daily Bot Trigger is running.");
   },
@@ -220,6 +216,8 @@ export default {
 5. **Permissions** → **Actions** → 選 **Read and write**
 6. **Generate token** → 複製 Token → 填入 Step 6 的 `GITHUB_TOKEN`
 
+> ⚠️ Token 只會顯示一次，複製後請立刻貼到 Cloudflare，之後就看不到了。若遺失需重新產生。
+
 ---
 
 ## Step 8 ─ 測試看看！🎉
@@ -227,7 +225,7 @@ export default {
 1. 前往你的 GitHub repo → 點上方 **Actions**
 2. 左側點 **每日新聞推播**
 3. 右側點 **Run workflow** → **Run workflow**
-4. 等約 1 分鐘，Telegram 應該會收到第一則新聞摘要！
+4. 等約 **1~2 分鐘**，Telegram 應該會收到第一則新聞摘要！
 
 ---
 
@@ -250,7 +248,10 @@ export default {
 編輯 `news_bot.py` 中的 `RSS_FEEDS`，加入你想要的 RSS 網址即可。
 
 **Q：Gemini 免費額度夠用嗎？**
-完全夠。免費方案每天 1,500 次請求，這個 Bot 每天只用 1 次。
+完全夠。免費方案每天 500 次請求，這個 Bot 每天只用 6 次（每個新聞分類各呼叫 1 次 API）。
+
+**Q：收到的訊息是空白的怎麼辦？**
+可能是短時間內測試太多次觸發了 Gemini 的頻率限制（429 錯誤）。等幾分鐘後再試，或等隔天 quota 重置。
 
 ---
 
