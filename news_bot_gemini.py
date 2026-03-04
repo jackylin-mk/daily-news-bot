@@ -2,7 +2,7 @@
 每日新聞摘要 Telegram Bot（免費版）
 
 新聞分類：台灣綜合 · 國際 · 科技 · AI · 娛樂休閒 · 財經
-AI 摘要：Google Gemini 1.5 Flash（免費方案，每天 1,500 次請求）
+AI 摘要：Google Gemini 2.0 Flash（免費方案，每天 1,500 次請求）
 推播方式：Telegram（支援多人）
 排程觸發：Cloudflare Workers Cron → GitHub Actions（每天台灣時間 08:00）
 
@@ -280,7 +280,7 @@ def call_ai(prompt: str) -> str:
         "generationConfig": {"maxOutputTokens": 2048},
     }).encode("utf-8")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     req = Request(
         url,
         data=body,
