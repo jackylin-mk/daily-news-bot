@@ -257,7 +257,7 @@ def build_category_prompt(category: str, items: list[dict]) -> str:
 def call_ai(prompt: str) -> str:
     """呼叫 Groq API 取得摘要（免費方案，OpenAI 相容格式）"""
     body = json.dumps({
-        "model": "llama-3.3-70b-versatile",
+        "model": "llama-3.1-8b-instant",
         "max_tokens": 512,
         "messages": [
             {"role": "system", "content": "你是一位專業的繁體中文新聞編輯。"},
@@ -265,6 +265,7 @@ def call_ai(prompt: str) -> str:
         ],
     }).encode("utf-8")
 
+    from urllib.error import HTTPError
     req = Request(
         "https://api.groq.com/openai/v1/chat/completions",
         data=body,
@@ -275,10 +276,13 @@ def call_ai(prompt: str) -> str:
         method="POST",
     )
 
-    with urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read().decode())
-
-    return data["choices"][0]["message"]["content"]
+    try:
+        with urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+        return data["choices"][0]["message"]["content"]
+    except HTTPError as e:
+        error_body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {e.code}: {error_body}")
 
 
 def send_telegram(text: str):
@@ -321,7 +325,7 @@ def main():
         send_telegram("⚠️ 今天無法抓取新聞，請檢查 RSS 來源。")
         return
 
-    print("🤖 正在用 Groq llama-3.3-70b 產生摘要（分類分批處理）...")
+    print("🤖 正在用 Groq llama-3.1-8b 產生摘要（分類分批處理）...")
     today = datetime.now(TW_TZ).strftime("%Y/%m/%d (%A)")
     parts = [f"<b>📰 每日新聞摘要 — {today}</b>\n"]
 
@@ -331,10 +335,13 @@ def main():
             continue
         try:
             result = call_ai(build_category_prompt(category, items))
+            print(f"  ✅ {category}：{len(result)} 字")
             parts.append(result.strip())
-            time.sleep(3)  # 每個分類之間稍微間隔，避免觸發 RPM 限制
+            time.sleep(3)
         except Exception as e:
-            print(f"⚠️ {category} 摘要失敗：{e}")
+            print(f"  ❌ {category} 摘要失敗：{e}")
+
+    print(f"📋 組合完成，總長度：{len(chr(10).join(parts))} 字，共 {len(parts)-1} 個分類")
 
     summary = "\n\n".join(parts)
 
