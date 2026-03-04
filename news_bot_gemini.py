@@ -264,7 +264,7 @@ def call_ai(prompt: str) -> str:
         "generationConfig": {"maxOutputTokens": 2048},
     }).encode("utf-8")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     max_retries = 3
     wait_seconds = 60
