@@ -39,7 +39,7 @@ def call_openai(system_prompt: str, user_prompt: str, model: str = "gpt-4o-mini"
     """呼叫 OpenAI Chat Completions API。"""
     body = json.dumps({
         "model": model,
-        "max_tokens": 2000,
+        "max_tokens": 4096,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
