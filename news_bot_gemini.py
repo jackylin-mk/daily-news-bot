@@ -1,4 +1,4 @@
-name: 每日新聞推播（Gemini 免費版測試）
+name: 每日新聞推播Gemini免費版測試
 
 on:
   workflow_dispatch:   # 只能手動觸發，不會自動跑
