@@ -235,39 +235,23 @@ def fetch_all_news(seen: set) -> dict[str, list[dict]]:
     return all_news
 
 
-def build_prompt(all_news: dict[str, list[dict]]) -> str:
-    """組合 prompt 給 GPT 做摘要"""
-    news_text = ""
-    for category, items in all_news.items():
-        news_text += f"\n\n## {category}\n"
-        for i, item in enumerate(items, 1):
-            news_text += f"{i}. {item['title']}\n"
-            if item["description"]:
-                news_text += f"   {item['description']}\n"
-
+def build_category_prompt(category: str, items: list[dict]) -> str:
+    """為單一分類組合 prompt（分批呼叫，降低 token 量）"""
     today = datetime.now(TW_TZ).strftime("%Y/%m/%d (%A)")
+    news_text = ""
+    for i, item in enumerate(items, 1):
+        news_text += f"{i}. {item['title']}\n"
+        if item["description"]:
+            news_text += f"   {item['description']}\n"
 
-    return f"""你是一位專業的新聞編輯。以下是今天（{today}）從各大媒體抓取的新聞標題與摘要。
+    return f"""你是一位專業的繁體中文新聞編輯。以下是今天（{today}）{category}的新聞。
+挑出 3~5 則最重要的，用一句話摘要，只輸出以下格式，不要其他說明：
 
-請幫我：
-1. 每個分類挑出 3-5 則最重要的新聞
-2. 用繁體中文撰寫簡短摘要（每則 1-2 句話）
-3. 格式使用 Telegram 支援的 HTML 格式
-
-輸出格式範例：
-<b>📰 每日新聞摘要 — {today}</b>
-
-<b>🇹🇼 台灣綜合</b>
-• <b>標題</b>：一句話摘要
+<b>{category}</b>
 • <b>標題</b>：一句話摘要
 
-（其他分類同上）
-
-結尾加上一句鼓勵的話。
-
-以下是今天的原始新聞：
-{news_text}
-"""
+新聞如下：
+{news_text}"""
 
 
 def call_ai(prompt: str) -> str:
@@ -283,7 +267,7 @@ def call_ai(prompt: str) -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
 
     max_retries = 3
-    wait_seconds = 30  # Free Tier RPM 限制，遇到 429 等 30 秒再重試
+    wait_seconds = 60
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -345,8 +329,22 @@ def main():
         send_telegram("⚠️ 今天無法抓取新聞，請檢查 RSS 來源。")
         return
 
-    print("🤖 正在用 Gemini 2.0 Flash Lite 產生摘要...")
-    summary = call_ai(build_prompt(all_news))
+    print("🤖 正在用 Gemini 2.0 Flash Lite 產生摘要（分類分批處理）...")
+    today = datetime.now(TW_TZ).strftime("%Y/%m/%d (%A)")
+    parts = [f"<b>📰 每日新聞摘要 — {today}</b>\n"]
+
+    import time
+    for category, items in all_news.items():
+        if not items:
+            continue
+        try:
+            result = call_ai(build_category_prompt(category, items))
+            parts.append(result.strip())
+            time.sleep(3)  # 每個分類之間稍微間隔，避免觸發 RPM 限制
+        except Exception as e:
+            print(f"⚠️ {category} 摘要失敗：{e}")
+
+    summary = "\n\n".join(parts)
 
     # Telegram 訊息長度限制 4096 字
     if len(summary) > 4096:
