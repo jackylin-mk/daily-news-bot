@@ -1,7 +1,9 @@
-name: VoteFlux 每日戰報
+name: VoteFlux 競品週報
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [weekly-report]
 
 permissions:
   contents: read
@@ -22,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run VoteFlux Bot
+      - name: Run VoteFlux 競品週報 Bot
         id: bot
         continue-on-error: true
         env:
