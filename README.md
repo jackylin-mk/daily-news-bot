@@ -1,5 +1,5 @@
 # 🤖 Daily News + VoteFlux Intelligence Bot
-> 每天早上 08:00 準時推播新聞摘要與預測市場競品戰報；每週一早上 08:00 推播預測市場週報。全程零人工介入。
+> 每天早上 08:00 準時推播新聞摘要；每週一早上 08:00 推播競品週報與預測市場週報。全程零人工介入。
 
 ---
 
@@ -9,7 +9,7 @@
 |-----|------|---------|------|------|
 | 📰 **每日新聞摘要（付費版）** | 台灣綜合 · 國際 · 科技 · AI · 財經 · 娛樂 | GPT-4o-mini | Telegram 訊息 | 每天 08:00 |
 | 📰 **每日新聞摘要（免費版）** | 台灣綜合 · 國際 · 科技 · AI · 財經 · 娛樂 | Gemini 2.5 Flash | Telegram 訊息 | 每天 08:00 |
-| 📊 **VoteFlux 每日戰報** | 預測市場競品分析（資深玩家視角） | GPT-4o-mini | GitHub Pages + Telegram 連結 | 每天 08:00 |
+| 📊 **VoteFlux 競品週報** | 預測市場競品分析（資深玩家視角） | GPT-4o-mini | GitHub Pages + Telegram 連結 | 每週一 08:00 |
 | 🎰 **預測市場週報** | 老司機真心話：趨勢 · 比價 · 社群 · 埋伏建議 | GPT-4o-mini | GitHub Pages + Telegram 連結 | 每週一 08:00 |
 
 ---
@@ -23,15 +23,13 @@
 │  daily-bot-trigger     每天 UTC 00:00（台灣 08:00）           │
 │  weekly-report-trigger 每週一 UTC 00:00（台灣 08:00）         │
 └──────────┬──────────────────────────────┬────────────────────┘
-           ▼                              ▼
+           ▼ 每天                          ▼ 每週一
 ┌──────────────────────┐   ┌─────────────────────────────────────┐
-│  📰 每日新聞推播       │   │  📊 VoteFlux 每日戰報                │
+│  📰 每日新聞推播       │   │  📊 VoteFlux 競品週報                │
 │  RSS → 過濾去重       │   │  GPT-4o-mini (JSON)                 │
 │  → AI 摘要           │   │  → Python HTML → GitHub Pages       │
 │  → Telegram 推播      │   │  → Telegram 連結                     │
-└──────────────────────┘   └─────────────────────────────────────┘
-                                          ▼（每週一）
-                            ┌─────────────────────────────────────┐
+└──────────────────────┘   ├─────────────────────────────────────┤
                             │  🎰 預測市場週報                      │
                             │  GPT-4o-mini (JSON)                 │
                             │  → Python HTML → GitHub Pages       │
@@ -77,18 +75,18 @@ GitHub Actions 免費排程有 5~30 分鐘延遲。改用 Cloudflare Workers Cro
 
 ---
 
-## 📊 VoteFlux 每日戰報
+## 📊 VoteFlux 競品週報
 
-以一位**在預測市場打滾超過 10 年的資深玩家**第一人稱視角撰寫，風格直接、犀利、用數據和親身經驗說話。
+以一位**在預測市場打滾超過 10 年的資深玩家**第一人稱視角撰寫，風格直接、犀利、用數據和親身經驗說話。每週一發布。
 
 ### 報告內容
 
 | 區塊 | 內容 |
 |------|------|
-| 🔍 **DAILY DISCOVERY** | 三步驟競爭選拔：候選池最活躍 vs AI 場外自選，勝出者登場 + 落選理由 |
+| 🔍 **WEEKLY DISCOVERY** | 三步驟競爭選拔：候選池最活躍 vs AI 場外自選，勝出者登場 + 落選理由 |
 | 📊 **競品評分總覽** | 6 大平台 × 6 固定維度（流動性深度 · 費用結構 · 出入金便利性 · 盤口豐富度 · 監管合規 · 介面體驗），1-10 分顏色標示 |
 | 🔬 **各平台詳細點評** | 每個維度的分數與一句話犀利點評 + 總結 |
-| 📝 **今日觀察與碎碎念** | 第一人稱的市場觀察，像老手寫交易日記 |
+| 📝 **本週觀察與碎碎念** | 第一人稱的市場觀察，像老手寫交易日記 |
 | ⚔️ **給 VoteFlux 的建議** | 站在老玩家立場的實際可執行建議 |
 
 ### 競品清單
@@ -100,11 +98,11 @@ GitHub Actions 免費排程有 5~30 分鐘延遲。改用 Cloudflare Workers Cro
 | 3 | **VoteFlux** | 主體分析對象 |
 | 4 | **Hyperliquid** | Outcome Trading |
 | 5 | **Predict.fun** | DeFi 生息預測 |
-| 6 | **DAILY DISCOVERY** | 三步驟競爭選拔（每天輪換） |
+| 6 | **WEEKLY DISCOVERY** | 三步驟競爭選拔（每週輪換） |
 
-### DAILY DISCOVERY 選拔機制
-每天透過三步驟競爭決定當日 DAILY DISCOVERY：
-1. **步驟一**：從候選池挑出「今天最活躍」的平台
+### WEEKLY DISCOVERY 選拔機制
+每週透過三步驟競爭決定本週 WEEKLY DISCOVERY：
+1. **步驟一**：從候選池挑出「本週最活躍」的平台
 2. **步驟二**：AI 在候選池外主動找一個「近期值得關注」的平台
 3. **步驟三**：兩者比較，選出更活躍的那個登場，並說明落選原因
 
@@ -154,8 +152,8 @@ https://jackylin-mk.github.io/daily-news-bot/weekly-YYYY-MM-DD.html
 
 | Worker 名稱 | Cron | 觸發 Workflow |
 |---|---|---|
-| `daily-bot-trigger` | `0 0 * * *` | 每日新聞 + VoteFlux 戰報 |
-| `weekly-report-trigger` | `0 0 * * 1` | 預測市場週報 |
+| `daily-bot-trigger` | `0 0 * * *` | 每日新聞 |
+| `weekly-report-trigger` | `0 0 * * 1` | VoteFlux 競品週報 + 預測市場週報 |
 
 每個 Worker 都需要設定：`GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_TOKEN`
 
@@ -199,7 +197,7 @@ TITLE_BLACKLIST = [
 daily-news-bot/
 ├── 📄 news_bot.py                        # 每日新聞摘要 Bot（付費版，OpenAI）
 ├── 📄 news_bot_gemini.py                 # 每日新聞摘要 Bot（免費版，Gemini 2.5 Flash）
-├── 📄 voteflux_bot.py                    # VoteFlux 每日戰報 Bot
+├── 📄 voteflux_bot.py                    # VoteFlux 競品週報 Bot
 ├── 📄 voteflux_weekly.py                 # 預測市場週報 Bot
 ├── 📄 README.md
 ├── 📄 QUICKSTART.md                      # 給朋友的新手設定教學
@@ -208,7 +206,7 @@ daily-news-bot/
 │   └── weekly-worker.js                   # 週報觸發器
 └── 📂 .github/workflows/
     ├── daily-news.yml                     # Action: 每日新聞推播
-    ├── voteflux-report.yml                # Action: VoteFlux 每日戰報
+    ├── voteflux-report.yml                # Action: VoteFlux 競品週報
     ├── voteflux-weekly-report.yml         # Action: 預測市場週報
     └── daily-news-gemini-test.yml         # Action: Gemini 免費版測試
 ```
@@ -226,9 +224,9 @@ daily-news-bot/
 | GitHub Pages | ✅ 免費 |
 | Telegram Bot API | ✅ 免費 |
 | Gemini API（免費版新聞摘要） | ✅ 免費 |
-| OpenAI API（付費版新聞 + VoteFlux 日報 + 週報） | ~$0.01 - $0.02 / 天 |
+| OpenAI API（付費版新聞 + VoteFlux 競品週報 + 預測市場週報） | ~$0.01 / 週 + $0.003 / 天 |
 
-> **💡 每月約 $0.3 ~ $0.6 美元**（僅 OpenAI 用量）
+> **💡 每月約 $0.15 ~ $0.3 美元**（僅 OpenAI 用量，週報改為每週後費用減半）
 
 ---
 
@@ -238,7 +236,7 @@ daily-news-bot/
 |------|------|
 | **語言** | Python 3.12（零外部套件）+ JavaScript（Worker） |
 | **排程** | Cloudflare Workers Cron（秒級精準） |
-| **AI 模型** | GPT-4o-mini（VoteFlux 日報 + 週報）· Gemini 2.5 Flash（免費版新聞） |
+| **AI 模型** | GPT-4o-mini（VoteFlux 競品週報 + 預測市場週報）· Gemini 2.5 Flash（免費版新聞） |
 | **去重複** | GitHub Actions Cache 跨天保留已推播標題 hash |
 | **報告架構** | AI → JSON → Python HTML 模板 → GitHub Pages artifact 部署 |
 | **推播** | Telegram Bot API（多人 · HTML + 純文字 fallback） |
