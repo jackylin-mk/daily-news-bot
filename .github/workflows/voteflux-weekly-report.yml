@@ -5,6 +5,10 @@ on:
   repository_dispatch:
     types: [weekly-report]
 
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pages: write
