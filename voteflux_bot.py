@@ -317,7 +317,7 @@ def main():
     save_html_report(html_content)
 
     report_url = f"{GITHUB_PAGES_URL}/voteflux-weekly-{NOW_FILE}.html"
-    message = f'🤖 <b>VoteFlux 競品週報 — {NOW_STR} (Monday)</b>\n\n🔗 <a href="{report_url}">📖 查看完整報告</a>'
+    message = f'🤖 <b>VoteFlux 競品週報 — {NOW_STR}</b>\n\n🔗 <a href="{report_url}">📖 查看完整報告</a>'
     print("\n📤 正在推播到 Telegram...")
     send_telegram(message)
     print("\n🎉 VoteFlux 競品週報完成！")
