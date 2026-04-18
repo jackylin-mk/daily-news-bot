@@ -1039,6 +1039,7 @@ def run_analysis():
         "新手引導": [
             "怎麼玩", "如何玩", "怎麼用", "如何用", "教學", "get started", "how to play",
             "怎麼進平台", "如何進入", "怎麼登入平台", "怎麼進去",
+            "怎麼進平台", "如何進入", "怎麼登入平台", "怎麼進去",
             "how to use", "如何開始", "第一次", "新手", "入門", "guide", "tutorial",
             "規則", "遊戲規則", "下載 app", "下載app", "怎麼開始",
             "需要下載", "do i need to download",
@@ -1058,6 +1059,7 @@ def run_analysis():
             "只能用手機", "只能用telegram",
             "not open", "open the page", "cannot open", "page not", "homepage", "not working",
             "app not", "can't open", "unable to open", "not load",
+            "real time", "realtime", "live data", "live price", "real-time",
             "real time", "realtime", "live data", "live price", "real-time",
             "平台可信嗎", "平台準確嗎", "正確性", "reliable", "trustworthy", "help", "ratio", "exchange rate",
             "用戶名", "username", "設定用戶名",
@@ -1079,6 +1081,7 @@ def run_analysis():
             "信用卡", "credit card", "debit card",
             "external wallet", "外部錢包",
             "貨幣", "用什麼貨幣", "哪些貨幣可以", "currencies available", "available currency", "currencies supported", "what currencies",
+            "fee", "any fee", "fees", "charge", "charges", "手續費", "收費",
             "fee", "any fee", "fees", "charge", "charges", "手續費", "收費",
             "贏了可以拿", "贏了拿多少", "輸了損失", "輸了會損失",
             "win but no", "no points", "points not", "didn't receive", "not credited", "not received points",
@@ -1114,6 +1117,7 @@ def run_analysis():
         "市場結算與爭議": [
             "市場結算", "何時結算", "結算時間", "結算規則", "settlement", "when.*settlement",
             "get my settlement", "when can i get", "helo when", "結算了嗎", "幾時結算",
+            "will be settled", "amount.*settled", "when.*settled", "when the amount",
             "resolution", "oracle", "預言機", "uma",
             "爭議", "dispute", "對結果有異議", "結果有問題",
             "賽事取消", "市場取消", "延期", "cancelled market", "postponed",
@@ -1808,7 +1812,6 @@ def search_knowledge(query: str, k: int = TOP_K) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     un = update.effective_user.first_name
     ul = update.message.from_user.language_code or 'en'
-    photo = "https://i.postimg.cc/43qvTbvR/banner.png"
     if ul.startswith('zh'):
         t  = f"<b>哈囉 {un}！歡迎來到 PredictGO 官方助手 🚀</b>\n\n我是您的專屬 AI 客服。很高興為您服務！😊\n無論是關於平台操作、Game Points 儲值提領或是推薦獎勵，我都能為您解答喔！\n\n👇 <b>請點擊下方選單開始探索：</b>"
         kb = [['🚀 如何開始？','💰 存款 / 提款'],['🎲 如何下注？','🎁 推薦獎勵？']]
@@ -1822,11 +1825,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         t  = f"<b>Hello {un}! Welcome to PredictGO Official Assistant 🚀</b>\n\nI'm your AI assistant <b>Vofu</b>. Glad to help! 😊\nFeel free to ask about platform operations, Game Points (GP) deposits/withdrawals, or referral rewards.\n\n👇 <b>Please click a button below to explore:</b>"
         kb = [['🚀 How to get started?','💰 Deposit / Withdraw'],['🎲 How to bet?','🎁 Referral rewards?']]
     rm = ReplyKeyboardMarkup(kb, resize_keyboard=True, one_time_keyboard=False)
-    try:
-        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo, caption=t, parse_mode='HTML', reply_markup=rm)
-    except Exception as e:
-        print(f"[{INSTANCE_ID}] ⚠️ send_photo: {e}", flush=True)
-        await update.message.reply_text(t, parse_mode='HTML', reply_markup=rm)
+    await update.message.reply_text(t, parse_mode='HTML', reply_markup=rm)
     log_conversation(update.effective_user.id, un, ul, "/start", "[歡迎訊息]")
 
 async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2524,6 +2523,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- 9. 主程式 ---
 _bot_instance = None   # 供排程器呼叫 send_kb_gap_report 使用
+_main_loop    = None   # 主 event loop，供 thread 內 run_coroutine_threadsafe 使用
 _main_loop    = None   # 主 event loop，供 thread 內 run_coroutine_threadsafe 使用
 BROADCAST_PROMPT  = "📢 請輸入要廣播的訊息內容（回覆此訊息）："  # 廣播提示，兩邊比對用
 BROADCAST_WAITING = 1   # ConversationHandler 狀態：等待廣播內容輸入
