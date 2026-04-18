@@ -1038,6 +1038,7 @@ def run_analysis():
     cats = {
         "新手引導": [
             "怎麼玩", "如何玩", "怎麼用", "如何用", "教學", "get started", "how to play",
+            "怎麼進平台", "如何進入", "怎麼登入平台", "怎麼進去",
             "how to use", "如何開始", "第一次", "新手", "入門", "guide", "tutorial",
             "規則", "遊戲規則", "下載 app", "下載app", "怎麼開始",
             "需要下載", "do i need to download",
@@ -1057,6 +1058,7 @@ def run_analysis():
             "只能用手機", "只能用telegram",
             "not open", "open the page", "cannot open", "page not", "homepage", "not working",
             "app not", "can't open", "unable to open", "not load",
+            "real time", "realtime", "live data", "live price", "real-time",
             "平台可信嗎", "平台準確嗎", "正確性", "reliable", "trustworthy", "help", "ratio", "exchange rate",
             "用戶名", "username", "設定用戶名",
             "密碼會被", "密碼安全", "看到密碼", "錢包地址是我專屬", "safe here",
