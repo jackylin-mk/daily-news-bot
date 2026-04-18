@@ -6,7 +6,7 @@ from collections import defaultdict, Counter
 from urllib.parse import urlparse, parse_qs
 from openai import OpenAI
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters, ContextTypes
 try:
     from telegram import BufferedInputFile
 except ImportError:
@@ -1945,54 +1945,62 @@ async def refresh_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ 推送完成！成功 {ok} 人，失敗 {fail} 人（用戶可能已封鎖 bot）")
 
 
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    管理員廣播指令，兩步驟：
-    步驟 1：/broadcast → bot 提示輸入內容
-    步驟 2：管理員 reply 該提示訊息 → bot 發送給所有近 30 天用戶
-    """
+async def broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """步驟 1：管理員發 /broadcast，進入等待狀態"""
     if update.message.from_user.id != MY_USER_ID:
-        return
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "📢 請直接輸入廣播內容（支援 HTML 格式）：\n"
+        "例如：<b>粗體</b>、<a href=\"https://t.me/PredictGO\">連結</a>\n\n"
+        "輸入 /cancel 可取消廣播。"
+    )
+    return BROADCAST_WAITING
 
-    # 步驟 2：管理員 reply 了 bot 的提示訊息
-    if (update.message.reply_to_message
-            and update.message.reply_to_message.text == BROADCAST_PROMPT):
-        msg_text = update.message.text.strip()
-        if not msg_text:
-            await update.message.reply_text("❌ 訊息內容不能為空。")
-            return
+async def broadcast_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """步驟 2：收到廣播內容，發送給所有用戶"""
+    if update.message.from_user.id != MY_USER_ID:
+        return ConversationHandler.END
 
-        await update.message.reply_text(f"📤 開始廣播，請稍候...\n\n預覽：\n{msg_text}")
+    msg_text = update.message.text.strip()
+    if not msg_text:
+        await update.message.reply_text("❌ 訊息不能為空，請重新輸入：")
+        return BROADCAST_WAITING
 
+    await update.message.reply_text(f"📤 開始廣播，請稍候...\n\n預覽：\n{msg_text}")
+
+    try:
+        pool = _get_db_pool()
+        conn = pool.get_connection()
+        cur  = conn.cursor(dictionary=True)
+        cur.execute("""
+            SELECT DISTINCT user_id
+            FROM conversation_logs
+            WHERE user_id != %s
+        """, (MY_USER_ID,))
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+    except Exception as e:
+        await update.message.reply_text(f"❌ 撈取用戶失敗：{e}")
+        return ConversationHandler.END
+
+    ok, fail = 0, 0
+    for row in rows:
         try:
-            pool = _get_db_pool()
-            conn = pool.get_connection()
-            cur  = conn.cursor(dictionary=True)
-            cur.execute("""
-                SELECT DISTINCT user_id
-                FROM conversation_logs
-                WHERE user_id != %s
-            """, (MY_USER_ID,))
-            rows = cur.fetchall()
-            cur.close(); conn.close()
-        except Exception as e:
-            await update.message.reply_text(f"❌ 撈取用戶失敗：{e}")
-            return
+            await context.bot.send_message(chat_id=row["user_id"], text=msg_text, parse_mode="HTML")
+            ok += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            fail += 1
 
-        ok, fail = 0, 0
-        for row in rows:
-            try:
-                await context.bot.send_message(chat_id=row["user_id"], text=msg_text, parse_mode="HTML")
-                ok += 1
-                await asyncio.sleep(0.05)
-            except Exception:
-                fail += 1
+    await update.message.reply_text(
+        f"✅ 廣播完成！\n• 成功：{ok} 人\n• 失敗：{fail} 人（已封鎖 bot 或帳號異常）"
+    )
+    return ConversationHandler.END
 
-        await update.message.reply_text(f"✅ 廣播完成！\n• 成功：{ok} 人\n• 失敗：{fail} 人（已封鎖 bot 或帳號異常）")
-        return
-
-    # 步驟 1：初次發 /broadcast，提示輸入
-    await update.message.reply_text(BROADCAST_PROMPT)
+async def broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """取消廣播"""
+    await update.message.reply_text("❌ 廣播已取消。")
+    return ConversationHandler.END
 
 
 async def reload_kb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2285,13 +2293,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ul  = update.message.from_user.language_code or 'en'
     iz  = ul.startswith('zh')
 
-    # ── 優先攔截：管理員的廣播內容 reply ──
-    if (uid == MY_USER_ID
-            and update.message.reply_to_message
-            and update.message.reply_to_message.text == BROADCAST_PROMPT):
-        await broadcast(update, context)
-        return
-
     # ── 優先攔截：管理員的 KB缺口草稿編輯回覆 ──
     if uid == MY_USER_ID and _gap_session.get("edit_target"):
         await gap_edit_handler(update, context)
@@ -2524,7 +2525,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- 9. 主程式 ---
 _bot_instance = None   # 供排程器呼叫 send_kb_gap_report 使用
 _main_loop    = None   # 主 event loop，供 thread 內 run_coroutine_threadsafe 使用
-BROADCAST_PROMPT = "📢 請輸入要廣播的訊息內容（回覆此訊息）："  # 廣播提示，兩邊比對用
+BROADCAST_PROMPT  = "📢 請輸入要廣播的訊息內容（回覆此訊息）："  # 廣播提示，兩邊比對用
+BROADCAST_WAITING = 1   # ConversationHandler 狀態：等待廣播內容輸入
 _main_loop    = None   # 主 event loop，供 thread 內 run_coroutine_threadsafe 使用
 
 def main():
@@ -2545,7 +2547,13 @@ def main():
         app.add_handler(CommandHandler("reset",    reset_memory))
         app.add_handler(CommandHandler("reload",     reload_kb))
         app.add_handler(CommandHandler("refresh",    refresh_keyboard))
-        app.add_handler(CommandHandler("broadcast",  broadcast))
+        broadcast_conv = ConversationHandler(
+            entry_points=[CommandHandler("broadcast", broadcast_start)],
+            states={BROADCAST_WAITING: [MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_receive)]},
+            fallbacks=[CommandHandler("cancel", broadcast_cancel)],
+            per_user=True, per_chat=True,
+        )
+        app.add_handler(broadcast_conv)
         app.add_handler(CommandHandler("refresh",  refresh_keyboard))
         app.add_handler(CommandHandler("analysis", force_analysis))
         app.add_handler(CommandHandler("gaps",     gaps_report))
